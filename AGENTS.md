@@ -32,6 +32,10 @@ Safety is more important than broad device support.
 
 Protocol decoding should remain side-effect free.
 
+M0.1 framing lives in `protocol/frame.py`. Logical commands must be encoded by
+the codec before transport; decoders must inspect decoded payloads, never raw
+protected frame bytes.
+
 ## Coding requirements
 
 - Python 3.11+

@@ -1,18 +1,3 @@
-from .models import (
-    Capture,
-    Confidence,
-    Evidence,
-    Exchange,
-    ProbeReport,
-    ProbeResult,
-)
+from ._version import __version__
 
-__all__ = [
-    "Capture",
-    "Confidence",
-    "Evidence",
-    "Exchange",
-    "ProbeReport",
-    "ProbeResult",
-]
-__version__ = "0.1.0"
+__all__ = ["__version__"]

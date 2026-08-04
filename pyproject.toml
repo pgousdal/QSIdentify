@@ -4,29 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qsidentify"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Read-only identification and diagnostics for Quansheng radios"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
-authors = [
-  { name = "QSIdentify contributors" }
-]
+authors = [{ name = "QSIdentify contributors" }]
 dependencies = [
   "pyserial>=3.5",
   "typer>=0.12",
-  "rich>=13.7"
+  "rich>=13.7",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
   "ruff>=0.5",
-  "mypy>=1.10"
+  "mypy>=1.10",
+  "types-pyserial>=3.5",
+  "build>=1.2",
 ]
 
 [project.scripts]
 qsidentify = "qsidentify.cli:app"
+
+[tool.hatch.version]
+path = "src/qsidentify/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/qsidentify"]

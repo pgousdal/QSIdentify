@@ -2,33 +2,21 @@
 
 **Read-only identification and diagnostics for Quansheng radios.**
 
-QSIdentify probes a radio over a serial programming cable and records the
-evidence returned by the device. It is intentionally conservative:
+QSIdentify 0.1.1 sends one allowlisted, read-only identification query and
+records exactly what the radio returns. It reports protocol evidence without
+claiming that a firmware string proves a hardware revision.
 
-> QSIdentify reports evidence, not guesses.
+## M0.1 status
 
-The M0 release never writes EEPROM, never writes firmware and never switches a
-radio into flash mode.
+M0 incorrectly sent the logical identification payload as if it were a complete
+serial command, read the response in one generic operation, and searched framed
+and obfuscated bytes for text. M0.1 adds the Quansheng frame codec, bounded
+frame-aware transport, payload-only response classification, schema-validated
+captures, and stable CLI errors.
 
-## Status
-
-M0 repository foundation.
-
-Implemented:
-
-- serial-port discovery
-- USB/serial metadata display
-- read-only probe framework
-- normal-mode handshake transport
-- raw response capture
-- JSON reports
-- offline capture decoding
-- diagnostic command
-- simulated protocol tests
-- explicit safety policy
-
-The initial protocol codec deliberately treats unknown frames as evidence
-instead of pretending to identify unsupported radios.
+The codec is protocol-correct against implemented byte fixtures and published
+reverse-engineering evidence. No physical-radio capture is included, so real
+radios may reveal additional protocol variants.
 
 ## Installation
 
@@ -46,72 +34,53 @@ qsidentify probe /dev/ttyUSB0
 qsidentify probe --auto
 qsidentify probe /dev/ttyUSB0 --trace
 qsidentify probe /dev/ttyUSB0 --json
+qsidentify probe /dev/ttyUSB0 --capture capture.json
 qsidentify decode capture.json
 qsidentify doctor
 ```
 
-## Examples
+Example summary:
 
-List candidate programming ports:
+```text
+QSIdentify 0.1.1
 
-```bash
-qsidentify ports
+Transport
+  Port:              /dev/ttyUSB0
+  Baud rate:         38400
+  Request bytes:     16
+
+Protocol
+  Frame detected:    yes
+  Frame complete:    yes
+  Checksum:          valid
+  Message type:      firmware-identification-response
+
+Radio
+  Reported version:  V1.0
+  Inferred family:   -
+  Confidence:        low
 ```
 
-Probe one port:
+Use `--trace` to display logical and encoded transmit bytes, raw receive bytes,
+decoded payload, and received/calculated checksums. Use `--capture unknown.json`
+to preserve an unknown response for offline `qsidentify decode unknown.json`.
 
-```bash
-qsidentify probe /dev/ttyUSB0
-```
+## Safety boundary
 
-Probe and save a capture:
-
-```bash
-qsidentify probe /dev/ttyUSB0 --trace --capture radio.json
-```
-
-Decode an existing capture without connecting to a radio:
-
-```bash
-qsidentify decode radio.json
-```
-
-## Safety model
-
-M0 permits only:
-
-- opening a serial port
-- sending the configured identification handshake
-- reading the response
-- recording local metadata and byte streams
-
-M0 forbids:
-
-- EEPROM writes
-- firmware writes
-- erase commands
-- reset commands
-- automatic bootloader entry
-- arbitrary user-supplied transmit frames
-
-Every outbound byte sequence must be declared in
-`src/qsidentify/protocol/commands.py` with a safety classification.
+QSIdentify may discover ports, open the selected port, transmit the compiled-in
+identification query, read a bounded response, and save local evidence. It has
+no arbitrary-frame option and no EEPROM write, firmware write, erase, reset,
+reboot, or bootloader-entry command. Bootloader messages are recognized only
+when a radio sends one without prompting.
 
 ## Identification model
 
-QSIdentify separates facts into three levels:
+- **reported**: a string returned in the decoded radio payload
+- **detected**: observed framing or message behavior
+- **inferred**: a conservative protocol/firmware-family interpretation
 
-- **reported** — text or values returned directly by the radio
-- **detected** — protocol or transport behavior observed by QSIdentify
-- **inferred** — a model or hardware-family estimate based on evidence
-
-An inference always carries a confidence level and supporting evidence.
-
-## Current limitation
-
-Quansheng firmware strings are not guaranteed to uniquely identify hardware.
-Custom firmware can change the reported string, and related models can share
-protocols. M0 therefore favors captures and transparent evidence.
+`V1.0`, custom-firmware names, and similar strings can be changed or shared
+between products. They are not verified hardware identifiers.
 
 ## Development
 
@@ -120,7 +89,13 @@ pytest
 ruff check .
 mypy src
 python -m compileall -q src tests
+python -m build
+git diff --check
 ```
+
+All tests use generated fixtures and fake serial connections; no radio is
+required. See `docs/protocol.md`, `docs/protocol-safety.md`, and
+`docs/capture-format.md`.
 
 ## License
 
