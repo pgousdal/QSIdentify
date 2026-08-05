@@ -5,7 +5,7 @@ radios. Its primary purpose is to identify protocol, firmware, hardware
 revision, MCU family and bootloader from observable electronic evidence
 without opening or modifying the radio.
 
-QSIdentify 1.2.0 sends one allowlisted, read-only identification query and
+QSIdentify 1.3.0 sends one allowlisted, read-only identification query and
 records the complete bounded serial stream. It separates adapter echo, framed
 responses, null bytes, incomplete candidates and unknown binary evidence
 without claiming that a firmware string proves a hardware revision.
@@ -57,6 +57,11 @@ qsidentify evidence-probe /dev/ttyUSB0
 qsidentify evidence-report capture1.json capture2.json
 qsidentify evidence-compare capture1.json capture2.json --json
 qsidentify evidence-export capture1.json --output evidence-bundle.json
+qsidentify registry-create evidence-registry.json
+qsidentify registry-add evidence-registry.json evidence-bundle.json
+qsidentify registry-matrix evidence-registry.json
+qsidentify contribution-create evidence-bundle.json --output contribution.zip
+qsidentify contribution-review contribution.zip
 qsidentify probe /dev/ttyUSB0 --capture capture.json
 qsidentify monitor /dev/ttyUSB0 --duration 5 --dtr off --rts off --trace
 qsidentify matrix /dev/ttyUSB0 --capture-dir captures/matrix

@@ -1,0 +1,20 @@
+{
+  "scenarios": [
+    {"id": "one-bundle", "kind": "registry"},
+    {"id": "duplicate-bundle", "kind": "deduplication"},
+    {"id": "two-bundles-one-device", "kind": "device-counting"},
+    {"id": "two-devices-same-fingerprint", "kind": "fingerprint-comparison"},
+    {"id": "two-devices-different-fingerprints", "kind": "fingerprint-comparison"},
+    {"id": "conflicting-mcu-declarations", "kind": "blocking-conflict"},
+    {"id": "conflicting-pcb-declarations", "kind": "blocking-conflict"},
+    {"id": "correlated-candidate", "kind": "discriminator-policy"},
+    {"id": "contradicted-candidate", "kind": "discriminator-policy"},
+    {"id": "valid-contribution", "kind": "generated-deterministic-zip"},
+    {"id": "contribution-path-traversal", "kind": "generated-hostile-zip"},
+    {"id": "contribution-duplicate-member", "kind": "generated-hostile-zip"},
+    {"id": "contribution-executable", "kind": "generated-hostile-zip"},
+    {"id": "contribution-unsanitized", "kind": "generated-hostile-zip"},
+    {"id": "contribution-firmware-binary", "kind": "generated-hostile-zip"}
+  ],
+  "schema_version": 1
+}

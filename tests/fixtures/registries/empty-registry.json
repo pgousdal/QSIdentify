@@ -1,0 +1,13 @@
+{
+  "bundle_records": [],
+  "candidate_discriminator_records": [],
+  "created_utc": "2000-01-01T00:00:00+00:00",
+  "declaration_records": [],
+  "device_records": [],
+  "qsidentify_version": "1.3.0",
+  "registry_digest": "sha256:505e0a49aafd3159c61342ecf9ebfcdb50988ff0918375be72fe58785943a85c",
+  "registry_id": "registry:sha256:acdd1c7d8d6587c1fb7e37144d49a41b35eb8e79d2e11b00fb57b2a672f7a35b",
+  "review_events": [],
+  "schema_version": 1,
+  "updated_utc": "2000-01-01T00:00:00+00:00"
+}

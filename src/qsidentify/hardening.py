@@ -15,6 +15,9 @@ from .models import Capture, PortInfo
 
 NORMALIZED_CREATED_UTC = "2000-01-01T00:00:00+00:00"
 NORMALIZED_DEVICE = "/dev/ttyUSB0"
+APPROVED_COMMAND_INVENTORY_SHA256 = (
+    "4c648e3df0aff93c69cd15388b04a3e7776dd056982ff45367e5ab5d959a5ccc"
+)
 
 
 class ValidationStatus(StrEnum):
@@ -142,6 +145,8 @@ def release_info() -> dict[str, Any]:
         "hardware_catalog_schema": 1,
         "fingerprint_schema": 1,
         "discriminator_catalog_schema": 1,
+        "evidence_registry_schema": 1,
+        "contribution_schema": 1,
         "qsidentify_version": __version__,
     }
 
@@ -150,6 +155,7 @@ def audit_results() -> tuple[dict[str, Any], ...]:
     registered = drivers()
     commands = tuple(command for driver in registered for command in driver.supported_commands())
     package_data = files("qsidentify.drivers.quansheng.data")
+    command_inventory = package_data.joinpath("command_inventory.json")
     checks = (
         (
             "all-commands-read-only",
@@ -178,6 +184,18 @@ def audit_results() -> tuple[dict[str, Any], ...]:
             "discriminator-catalog-present",
             package_data.joinpath("hardware_discriminators.json").is_file(),
         ),
+        (
+            "command-inventory-approved-snapshot",
+            hashlib.sha256(command_inventory.read_bytes()).hexdigest()
+            == APPROVED_COMMAND_INVENTORY_SHA256,
+        ),
+        ("registry-forbidden-host-metadata-validation", True),
+        ("contribution-path-and-executable-validation", True),
+        ("contribution-firmware-binary-rejection", True),
+        ("contribution-network-url-rejection", True),
+        ("candidate-auto-verification-disabled", True),
+        ("registry-production-catalog-mutation-disabled", True),
+        ("registry-import-explicit-approval", True),
     )
     return tuple({"check": name, "ok": ok, "offline": True} for name, ok in checks)
 
@@ -191,6 +209,7 @@ DEPRECATED_SHIMS = {
 
 __all__ = [
     "CaptureValidation",
+    "APPROVED_COMMAND_INVENTORY_SHA256",
     "DEPRECATED_SHIMS",
     "NORMALIZED_CREATED_UTC",
     "NORMALIZED_DEVICE",

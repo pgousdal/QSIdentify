@@ -11,6 +11,11 @@ does not scrape projects at runtime and performs no network access. Repository
 names and compatibility information may become stale, so users must consult a
 project's own current documentation before flashing anything.
 
+Registry catalog proposals are separate review documents. They never modify
+this production catalog, never emit firmware downloads, never produce
+`compatible-confirmed`, and always retain supporting devices, bundles,
+contradictions, limitations and required human review.
+
 `qsidentify firmware-catalog-validate` checks schema versions, unique IDs,
 known MCU and revision identifiers, provenance, project/revision uniqueness,
 status/risk enums, binary URL/path exclusion and deterministic ordering.

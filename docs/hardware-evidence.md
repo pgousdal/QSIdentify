@@ -4,6 +4,15 @@ M0.3 tracks confidence separately for serial transport, protocol family,
 firmware version, marketed model, hardware revision, MCU family and firmware
 compatibility. One confirmed field does not make the others confirmed.
 
+Registry declarations—including model, case label, PCB text/revision, MCU
+marking, bootloader label, batch, notes and photograph digest—remain physical,
+user-supplied evidence. They never become protocol observations. Withdrawn
+declarations do not influence analysis; contradictory inspected declarations
+produce blocking reason codes.
+
+A repeated fingerprint is evidence of repeated electronic output, not proof of
+identical MCU, PCB revision or marketed model.
+
 The packaged registry contains these conservative records:
 
 - legacy/V1 UV-K5 family hardware: DP32G030

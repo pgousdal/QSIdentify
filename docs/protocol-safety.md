@@ -7,6 +7,11 @@ explicit safety class. The only M0.2 command is the read-only identification
 query. The probe checks the classification before encoding or transmitting it.
 The CLI has no input that becomes transmit bytes.
 
+M1.3 adds no command descriptor and no serial operation. Registry and
+contribution commands are offline. The audit pins the packaged command inventory
+to an approved SHA-256 snapshot; `0x0514 / identify-handshake` remains the only
+executable Quansheng transmit command.
+
 Prohibited capabilities include EEPROM writes, firmware chunks, flash erase,
 reset/reboot, mode changes, arbitrary frames, and automatic bootloader entry.
 Passive recognition of an already-returned `18 05` bootloader message does not

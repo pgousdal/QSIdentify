@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "kind": "empty-registry",
+      "path": "registries/empty-registry.json",
+      "schema_version": 1,
+      "sha256": "63eca88c495b1a6dadb8338b9e60e98d3bb137efeadf14d7ab6aff77cf53fada"
+    },
+    {
+      "kind": "scenario-catalog",
+      "path": "registry-scenarios.json",
+      "schema_version": 1,
+      "sha256": "10491f283d28c31c85f7abe76f8f2ba3a1b32edc11a24aab3da5675fca5957c7"
+    }
+  ],
+  "schema_version": 1
+}

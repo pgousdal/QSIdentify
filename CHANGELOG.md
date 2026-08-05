@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0 - 2026-08-05
+
+- add deterministic schema-v1 offline evidence registries with immutable records
+- separate bundle, content, fingerprint, device, capture and probe-run identities
+- aggregate repeated observations without treating captures as independent devices
+- add conservative discriminator correlation policy and blocking conflict codes
+- add deterministic, traversal-safe contribution ZIP creation and review
+- require explicit approval for atomic contribution imports and preserve audit events
+
 ## 1.2.0 - 2026-08-05
 
 - add a packaged inventory that keeps undocumented or unsafe commands unavailable

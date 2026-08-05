@@ -48,6 +48,10 @@ M1.2 electronic evidence analysis lives in `evidence.py`. Candidate
 discriminators are experimental and only `verified-discriminator` records may
 contribute to an automatic hardware identity.
 
+M1.3 offline aggregation lives in `evidence_registry.py`; deterministic archive
+review lives in `contribution.py`. Registries and contribution packages must not
+modify production catalogs or promote statistical correlation to verified identity.
+
 M0.3 advisory analysis is offline only. Firmware strings and marketed model
 names never establish a hardware revision or MCU. User declarations and local
 catalog inferences must remain visibly distinct from electronically observed

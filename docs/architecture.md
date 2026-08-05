@@ -5,6 +5,12 @@ pure protocol drivers. Core code owns port discovery, bounded serial I/O,
 capture serialization, command-line presentation and the public API. A driver
 owns every protocol byte, message interpretation and family-specific advisory.
 
+M1.3 adds an offline layer after sanitized bundle creation. `evidence_registry`
+stores immutable canonical bundle records, pseudonymous devices, declarations,
+candidates and review events. `contribution` validates deterministic ZIP files.
+Neither module imports transport code, opens ports, accesses the network, or
+modifies production catalogs.
+
 ```text
 Public API / CLI
        |
@@ -22,6 +28,16 @@ Selected driver ----------> stream analysis + decoded evidence
        |
        v
 Generic report/capture ---> optional driver advisory
+```
+
+```text
+captures -> sanitized bundle -> contribution review -> explicit registry import
+                                      |                       |
+                                      v                       v
+                              no implicit mutation     descriptive aggregation
+                                                              |
+                                                              v
+                                                    manual catalog proposal
 ```
 
 ## Lifecycles

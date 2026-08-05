@@ -11,8 +11,8 @@ def test_catalogs_load_from_package_resources() -> None:
 
 
 def test_built_artifacts_have_required_and_no_forbidden_members() -> None:
-    wheel = Path("dist/qsidentify-1.2.0-py3-none-any.whl")
-    sdist = Path("dist/qsidentify-1.2.0.tar.gz")
+    wheel = Path("dist/qsidentify-1.3.0-py3-none-any.whl")
+    sdist = Path("dist/qsidentify-1.3.0.tar.gz")
     if not wheel.exists() or not sdist.exists():
         return
     with zipfile.ZipFile(wheel) as archive:

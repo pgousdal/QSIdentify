@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .capture import read_capture
+from .evidence_registry import load_registry
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +64,38 @@ def validate_fixture_manifest(root: Path) -> FixtureValidation:
         )
         if expected != stored:
             errors.append(f"Decoded metadata mismatch: {entry['path']}")
-    return FixtureValidation(not errors, len(entries), tuple(errors))
+    checked = len(entries)
+    registry_manifest = root / "registry-manifest.json"
+    if registry_manifest.is_file():
+        try:
+            registry_entries = json.loads(registry_manifest.read_text())["entries"]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(f"Invalid registry fixture manifest: {exc}")
+            registry_entries = []
+        registry_paths = [entry.get("path") for entry in registry_entries]
+        if registry_paths != sorted(registry_paths) or len(registry_paths) != len(
+            set(registry_paths)
+        ):
+            errors.append("Registry fixture paths must be unique and sorted.")
+        for entry in registry_entries:
+            path = root / entry["path"]
+            checked += 1
+            if not path.is_file():
+                errors.append(f"Missing registry fixture: {entry['path']}")
+                continue
+            if hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
+                errors.append(f"Registry fixture digest mismatch: {entry['path']}")
+                continue
+            try:
+                if entry["kind"] == "empty-registry":
+                    load_registry(path)
+                else:
+                    parsed = json.loads(path.read_text())
+                    if parsed.get("schema_version") != entry["schema_version"]:
+                        errors.append(f"Registry fixture schema mismatch: {entry['path']}")
+            except (ValueError, OSError, json.JSONDecodeError) as exc:
+                errors.append(f"Invalid registry fixture {entry['path']}: {exc}")
+    return FixtureValidation(not errors, checked, tuple(errors))
 
 
 __all__ = ["FixtureValidation", "validate_fixture_manifest"]

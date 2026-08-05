@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -14,6 +14,13 @@ from rich.table import Table
 from . import __version__
 from .capture import CaptureError, build_capture, read_capture, write_capture
 from .comparison import compare_captures
+from .contribution import (
+    ContributionError,
+    create_contribution,
+    inspect_contribution,
+    plan_contribution_import,
+    review_contribution,
+)
 from .doctor import run_checks
 from .drivers import default_driver, drivers, get_driver
 from .evidence import (
@@ -25,6 +32,22 @@ from .evidence import (
     load_command_inventory,
     load_probe_definitions,
     validate_bundle,
+)
+from .evidence_registry import (
+    DuplicateEvidenceError,
+    RegistryError,
+    add_evidence_bundle,
+    analyze_registry,
+    catalog_proposal,
+    create_registry,
+    detect_conflicts,
+    load_registry,
+    propose_discriminator,
+    registry_matrix,
+    remove_evidence_bundle,
+    validate_registry,
+    write_json_atomic,
+    write_registry,
 )
 from .fixtures import validate_fixture_manifest
 from .hardening import (
@@ -1025,6 +1048,433 @@ def identify_command(
     console.print(f"  ID:                 {report['fingerprint']['fingerprint_id']}")
     console.print("[bold]Next required evidence[/bold]")
     console.print("  A verified electronic discriminator for hardware revision or MCU.")
+
+
+def _registry_output(value: object, as_json: bool) -> None:
+    if as_json:
+        sys.stdout.write(json.dumps(value, sort_keys=True) + "\n")
+
+
+@app.command("registry-create")
+def registry_create_command(
+    path: Path,
+    label: Annotated[str, typer.Option("--label")] = "default",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    if path.exists():
+        error_console.print("Registry already exists; refusing to overwrite it.")
+        raise typer.Exit(2)
+    try:
+        registry = create_registry(registry_label=label)
+        write_registry(path, registry)
+    except (RegistryError, OSError) as exc:
+        error_console.print(f"Registry creation failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {
+        "registry_digest": registry.registry_digest,
+        "registry_id": registry.registry_id,
+        "schema_version": registry.schema_version,
+        "status": "created",
+    }
+    if as_json:
+        _registry_output(output, True)
+    else:
+        console.print(f"Registry created: {registry.registry_id}")
+
+
+@app.command("registry-info")
+def registry_info_command(
+    path: Path, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
+    try:
+        registry = load_registry(path)
+        analysis = analyze_registry(registry)
+    except RegistryError as exc:
+        error_console.print(f"Registry inspection failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {
+        **analysis,
+        "conflicts": [item.to_dict() for item in detect_conflicts(registry)],
+        "registry_digest": registry.registry_digest,
+        "registry_id": registry.registry_id,
+        "schema_version": registry.schema_version,
+    }
+    if as_json:
+        _registry_output(output, True)
+    else:
+        for key, value in output.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("registry-validate")
+def registry_validate_command(
+    path: Path, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
+    try:
+        registry = load_registry(path)
+        result = validate_registry(registry)
+    except RegistryError as exc:
+        result = None
+        message = str(exc)
+    else:
+        message = ""
+    output: dict[str, Any] = (
+        result.to_dict()
+        if result is not None
+        else {"errors": [message], "valid": False, "warnings": []}
+    )
+    if as_json:
+        _registry_output(output, True)
+    else:
+        console.print("valid" if output["valid"] else "invalid")
+        for error in output["errors"]:
+            error_console.print(error)
+    if not output["valid"]:
+        raise typer.Exit(3)
+
+
+@app.command("registry-add")
+def registry_add_command(
+    registry_path: Path,
+    bundles: list[Path],
+    device_label: Annotated[str | None, typer.Option("--device-label")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        registry = load_registry(registry_path)
+        imported: list[str] = []
+        relationships: list[str] = []
+        conflicts: list[dict[str, Any]] = []
+        for bundle in bundles:
+            mutation = add_evidence_bundle(registry, bundle, device_label=device_label)
+            registry = mutation.registry
+            imported.extend(mutation.imported_bundle_ids)
+            relationships.extend(mutation.relationships)
+            conflicts.extend(item.to_dict() for item in mutation.conflicts)
+        write_registry(registry_path, registry)
+    except DuplicateEvidenceError as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(1) from None
+    except (RegistryError, OSError) as exc:
+        error_console.print(f"Registry add failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {
+        "conflicts": conflicts,
+        "imported_bundle_ids": sorted(imported),
+        "relationships": sorted(set(relationships)),
+    }
+    if as_json:
+        _registry_output(output, True)
+    else:
+        console.print(f"Imported {len(imported)} bundle(s).")
+
+
+@app.command("registry-remove")
+def registry_remove_command(
+    registry_path: Path,
+    bundle_id: str,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        registry = remove_evidence_bundle(load_registry(registry_path), bundle_id)
+        write_registry(registry_path, registry)
+    except (RegistryError, OSError) as exc:
+        error_console.print(f"Registry removal failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {"bundle_id": bundle_id, "status": "removed"}
+    if as_json:
+        _registry_output(output, True)
+    else:
+        console.print(f"Removed {bundle_id}; audit event retained.")
+
+
+@app.command("registry-list")
+def registry_list_command(
+    registry_path: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        registry = load_registry(registry_path)
+    except RegistryError as exc:
+        error_console.print(f"Registry listing failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {
+        "bundles": [
+            {
+                "bundle_id": item.bundle_id,
+                "content_digest": item.content_digest,
+                "device_id": item.device_id,
+                "electronic_fingerprint": item.electronic_fingerprint,
+            }
+            for item in registry.bundles
+        ]
+    }
+    if as_json:
+        _registry_output(output, True)
+    else:
+        table = Table("Bundle ID", "Device", "Fingerprint")
+        for item in output["bundles"]:
+            table.add_row(
+                item["bundle_id"], item["device_id"] or "unknown", item["electronic_fingerprint"]
+            )
+        console.print(table)
+
+
+@app.command("registry-export")
+def registry_export_command(
+    registry_path: Path,
+    output: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    if registry_path.resolve() == output.resolve():
+        error_console.print("Registry export output must differ from its input.")
+        raise typer.Exit(2)
+    try:
+        registry = load_registry(registry_path)
+        write_registry(output, registry)
+    except (RegistryError, OSError) as exc:
+        error_console.print(f"Registry export failed: {exc}")
+        raise typer.Exit(3) from None
+    result = {"registry_digest": registry.registry_digest, "status": "exported"}
+    if as_json:
+        _registry_output(result, True)
+    else:
+        console.print("Registry exported.")
+
+
+@app.command("registry-matrix")
+def registry_matrix_command(
+    registry_path: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        rows = registry_matrix(load_registry(registry_path))
+    except RegistryError as exc:
+        error_console.print(f"Registry matrix failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        _registry_output({"devices": list(rows)}, True)
+        return
+    table = Table("Device", "Firmware", "Fingerprint", "Declared MCU", "Declared PCB")
+    for row in rows:
+        table.add_row(
+            row["label"],
+            ", ".join(row["firmware"]) or "unknown",
+            ", ".join(row["fingerprints"]) or "unknown",
+            row["declared_mcu"] or "unknown",
+            row["declared_pcb"] or "unknown",
+        )
+    console.print(table)
+
+
+@app.command("registry-discriminators")
+def registry_discriminators_command(
+    registry_path: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        candidates = load_registry(registry_path).candidates
+    except RegistryError as exc:
+        error_console.print(f"Candidate listing failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {"candidates": [{**asdict(item), "status": item.status.value} for item in candidates]}
+    if as_json:
+        _registry_output(output, True)
+    else:
+        for item in output["candidates"]:
+            console.print(f"{item['candidate_id']}: {item['status']}")
+
+
+@app.command("registry-discriminator-show")
+def registry_discriminator_show_command(
+    registry_path: Path,
+    candidate_id: str,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        candidate = next(
+            (
+                item
+                for item in load_registry(registry_path).candidates
+                if item.candidate_id == candidate_id
+            ),
+            None,
+        )
+    except RegistryError as exc:
+        error_console.print(f"Candidate inspection failed: {exc}")
+        raise typer.Exit(3) from None
+    if candidate is None:
+        error_console.print(f"Unknown candidate: {candidate_id}")
+        raise typer.Exit(2)
+    output = {**asdict(candidate), "status": candidate.status.value}
+    if as_json:
+        _registry_output(output, True)
+    else:
+        for key, value in output.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("registry-discriminator-propose")
+def registry_discriminator_propose_command(
+    registry_path: Path,
+    offset: Annotated[int, typer.Option("--offset", min=0)],
+    length: Annotated[int, typer.Option("--length", min=1, max=32)],
+    scope: Annotated[str, typer.Option("--scope")] = "quansheng",
+    probe: Annotated[str, typer.Option("--probe")] = "firmware-identification",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        registry = propose_discriminator(
+            load_registry(registry_path),
+            offset=offset,
+            length=length,
+            driver_id=scope,
+            probe_definition=probe,
+        )
+        write_registry(registry_path, registry)
+        candidate = next(
+            item for item in registry.candidates if item.offset == offset and item.length == length
+        )
+    except (RegistryError, OSError) as exc:
+        error_console.print(f"Candidate proposal failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {**asdict(candidate), "status": candidate.status.value}
+    if as_json:
+        _registry_output(output, True)
+    else:
+        console.print(f"{candidate.candidate_id}: {candidate.status.value}")
+
+
+@app.command("registry-catalog-proposal")
+def registry_catalog_proposal_command(
+    registry_path: Path,
+    output: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        proposal = catalog_proposal(load_registry(registry_path))
+        if proposal["blocking_conflicts"]:
+            error_console.print("Catalog proposal blocked by registry conflicts.")
+            raise typer.Exit(2)
+        write_json_atomic(output, proposal)
+    except (RegistryError, OSError) as exc:
+        error_console.print(f"Catalog proposal failed: {exc}")
+        raise typer.Exit(3) from None
+    result = {
+        "blocking_conflict_count": len(proposal["blocking_conflicts"]),
+        "candidate_count": len(proposal["candidates"]),
+        "status": "manual-review-required",
+    }
+    if as_json:
+        _registry_output(result, True)
+    else:
+        console.print("Catalog proposal written; manual review is required.")
+
+
+@app.command("contribution-create")
+def contribution_create_command(
+    bundles: list[Path],
+    output: Annotated[Path, typer.Option("--output", "-o")],
+    notes: Annotated[str, typer.Option("--notes")] = "",
+    declarations_path: Annotated[Path | None, typer.Option("--declarations")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        declarations: tuple[dict[str, Any], ...] = ()
+        if declarations_path is not None:
+            raw_declarations = json.loads(declarations_path.read_text(encoding="utf-8"))
+            if not isinstance(raw_declarations, list) or not all(
+                isinstance(item, dict) for item in raw_declarations
+            ):
+                raise ContributionError("Declarations file must be a JSON array of objects.")
+            declarations = tuple(raw_declarations)
+        contribution_id = create_contribution(
+            tuple(bundles), output, declarations=declarations, notes=notes
+        )
+    except (ContributionError, OSError, json.JSONDecodeError) as exc:
+        error_console.print(f"Contribution creation failed: {exc}")
+        raise typer.Exit(3) from None
+    result = {"bundle_count": len(bundles), "contribution_id": contribution_id, "status": "created"}
+    if as_json:
+        _registry_output(result, True)
+    else:
+        console.print(f"Contribution created: {contribution_id}")
+
+
+@app.command("contribution-inspect")
+def contribution_inspect_command(
+    path: Path, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
+    try:
+        result = inspect_contribution(path)
+    except (ContributionError, OSError) as exc:
+        error_console.print(f"Contribution inspection failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        _registry_output(result, True)
+    else:
+        for key, value in result.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+def _contribution_review_output(path: Path, as_json: bool) -> None:
+    review = review_contribution(path)
+    if as_json:
+        _registry_output(review.to_dict(), True)
+    else:
+        console.print(review.classification)
+        for warning in review.warnings:
+            error_console.print(f"Warning: {warning}")
+        for error in review.errors:
+            error_console.print(error)
+    if not review.safe:
+        raise typer.Exit(3)
+
+
+@app.command("contribution-validate")
+def contribution_validate_command(
+    path: Path, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
+    _contribution_review_output(path, as_json)
+
+
+@app.command("contribution-review")
+def contribution_review_command(
+    path: Path, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
+    _contribution_review_output(path, as_json)
+
+
+@app.command("registry-import-contribution")
+def registry_import_contribution_command(
+    registry_path: Path,
+    contribution_path: Path,
+    yes: Annotated[bool, typer.Option("--yes")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        plan = plan_contribution_import(load_registry(registry_path), contribution_path)
+    except (ContributionError, RegistryError, OSError) as exc:
+        error_console.print(f"Contribution import failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {**plan.to_dict(), "dry_run": dry_run, "mutation_performed": False}
+    if not dry_run and not yes:
+        if as_json:
+            _registry_output(output, True)
+        error_console.print("Explicit --yes is required before registry mutation.")
+        raise typer.Exit(2)
+    if not dry_run:
+        try:
+            write_registry(registry_path, plan.mutation.registry)
+        except (RegistryError, OSError) as exc:
+            error_console.print(f"Contribution import failed: {exc}")
+            raise typer.Exit(3) from None
+        output["mutation_performed"] = True
+    if as_json:
+        _registry_output(output, True)
+    else:
+        console.print("Import plan complete." if dry_run else "Contribution imported.")
 
 
 @app.command("fixture-validate")
