@@ -67,9 +67,7 @@ def frame_size_from_header(header: bytes, *, max_payload_size: int = MAX_PAYLOAD
     if header[:2] != FRAME_HEADER:
         raise InvalidHeaderError("Invalid frame header.")
     if header[3] != RESERVED_VALUE:
-        raise InvalidReservedByteError(
-            f"Reserved header byte must be 00, got {header[3]:02x}."
-        )
+        raise InvalidReservedByteError(f"Reserved header byte must be 00, got {header[3]:02x}.")
     payload_length = header[2]
     if payload_length > max_payload_size:
         raise InvalidLengthError(

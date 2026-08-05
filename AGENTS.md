@@ -29,6 +29,8 @@ Safety is more important than broad device support.
 - `models.py` — immutable report and capture models
 - `capture.py` — deterministic JSON serialization
 - `doctor.py` — local environment checks
+- `advisory.py` — pure offline compatibility decisions
+- `catalog.py` — strict local hardware and firmware catalog loading
 
 Protocol decoding should remain side-effect free.
 
@@ -39,6 +41,11 @@ protected frame bytes.
 M0.2 stream analysis lives in `protocol/stream.py`. Read-chunk boundaries are
 transport evidence only. Exact transmit echoes must be excluded from radio
 responses, and variable unframed bytes must remain unidentified evidence.
+
+M0.3 advisory analysis is offline only. Firmware strings and marketed model
+names never establish a hardware revision or MCU. User declarations and local
+catalog inferences must remain visibly distinct from electronically observed
+evidence.
 
 ## Coding requirements
 

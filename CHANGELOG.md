@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-08-05
+
+- add a conservative offline firmware compatibility advisory
+- add canonical legacy/V1, V2/PY32F030 and V3/PY32F071 hardware records
+- add a versioned, human-reviewable firmware project catalog
+- keep protocol observations, user declarations and database inferences separate
+- reject conflicting revision, PCB and MCU declarations without recommendations
+- add firmware advice, firmware list, hardware list and catalog validation commands
+
 ## 0.2.0 - 2026-08-04
 
 - collect complete bounded RX streams until idle or total timeout

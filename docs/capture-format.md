@@ -22,3 +22,8 @@ inconsistent operation/safety fields produce controlled errors.
 
 Selected device paths beneath the local home directory are redacted. Captures
 do not collect unrelated device paths, usernames, network data or telemetry.
+
+M0.3 does not change or rewrite schema-v2 captures. `firmware-advice --json`
+emits a separate advisory object derived at invocation time. User-supplied
+model, revision, MCU and PCB evidence are therefore not inserted into an old
+capture unless a future explicit enriched-export format is introduced.

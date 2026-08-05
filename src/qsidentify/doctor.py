@@ -38,7 +38,7 @@ def run_checks(*, capture_directory: Path | None = None) -> tuple[DoctorCheck, .
     directory = capture_directory or Path.cwd()
     return (
         DoctorCheck("Python", sys.version_info >= (3, 11), platform.python_version()),
-        DoctorCheck("Package version", __version__ == "0.2.0", __version__),
+        DoctorCheck("Package version", __version__ == "0.3.0", __version__),
         DoctorCheck("pyserial", bool(serial.VERSION), serial.VERSION),
         DoctorCheck(
             "Serial-port discovery",

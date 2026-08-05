@@ -115,17 +115,13 @@ def test_monitor_capture_declares_no_transmit(tmp_path: Path) -> None:
         lambda data: data.update(logical_request_payload_hex="00"),
         lambda data: data.update(encoded_transmitted_frame_hex="abcd"),
         lambda data: data["safety"].update(classification="unsafe"),
-        lambda data: data["probe_report"].update(
-            transport_classification="null-byte-response"
-        ),
+        lambda data: data["probe_report"].update(transport_classification="null-byte-response"),
         lambda data: data["read_chunks"][0].update(monotonic_offset_ms=-1),
         lambda data: data["read_chunks"][0].update(data_hex=""),
     ],
 )
 def test_v2_schema_validation(tmp_path: Path, mutation) -> None:  # type: ignore[no-untyped-def]
-    data = build_capture(
-        result_fixture(), created_utc="2026-08-04T12:00:00+00:00"
-    ).to_dict()
+    data = build_capture(result_fixture(), created_utc="2026-08-04T12:00:00+00:00").to_dict()
     mutation(data)
     path = tmp_path / "bad.json"
     path.write_text(json.dumps(data))

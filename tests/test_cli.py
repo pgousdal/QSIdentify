@@ -62,8 +62,21 @@ def test_probe_json_stdout_contains_json_only(monkeypatch) -> None:  # type: ign
     monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: value)
     invocation = CliRunner().invoke(app, ["probe", "test-port", "--json"])
     assert invocation.exit_code == 1
-    assert json.loads(invocation.stdout)["qsidentify_version"] == "0.2.0"
+    assert json.loads(invocation.stdout)["qsidentify_version"] == "0.3.0"
     assert "QSIdentify" not in invocation.stdout
+
+
+def test_probe_json_can_include_offline_firmware_advice(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    value = result()
+    monkeypatch.setattr("qsidentify.cli.find_port", lambda _device: value.report.port)
+    monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: value)
+    invocation = CliRunner().invoke(
+        app,
+        ["probe", "test-port", "--json", "--firmware-advice", "--model", "UV-K5(8)"],
+    )
+    assert invocation.exit_code == 1
+    parsed = json.loads(invocation.stdout)
+    assert parsed["firmware_advisory"]["marketed_model"] == "UV-K5(8)"
 
 
 def test_version_uses_canonical_package_version() -> None:
@@ -105,3 +118,44 @@ def test_compare_output(tmp_path: Path) -> None:
     assert invocation.exit_code == 0
     assert "Exact match:" in invocation.stdout
     assert "SHA-256" in invocation.stdout
+
+
+def test_offline_catalog_commands() -> None:
+    runner = CliRunner()
+    validation = runner.invoke(app, ["firmware-catalog-validate"])
+    firmware = runner.invoke(app, ["firmware-list"])
+    hardware = runner.invoke(app, ["hardware-list"])
+    assert validation.exit_code == 0
+    assert "2026.08 is valid" in validation.stdout
+    assert firmware.exit_code == 0 and "egzumer-legacy" in firmware.stdout
+    assert hardware.exit_code == 0 and "DP32G030" in hardware.stdout
+
+
+def test_firmware_advice_json_is_json_only(tmp_path: Path) -> None:
+    path = tmp_path / "capture.json"
+    write_capture(path, build_capture(result("monitor")))
+    invocation = CliRunner().invoke(
+        app, ["firmware-advice", str(path), "--model", "UV-K5(8)", "--json"]
+    )
+    assert invocation.exit_code == 0
+    parsed = json.loads(invocation.stdout)
+    assert parsed["firmware_advisory"]["marketed_model"] == "UV-K5(8)"
+
+
+def test_firmware_advice_conflict_has_controlled_exit(tmp_path: Path) -> None:
+    path = tmp_path / "capture.json"
+    write_capture(path, build_capture(result("monitor")))
+    invocation = CliRunner().invoke(
+        app,
+        [
+            "firmware-advice",
+            str(path),
+            "--hardware-revision",
+            "V3",
+            "--mcu",
+            "DP32G030",
+        ],
+    )
+    assert invocation.exit_code == 2
+    assert "conflicting-evidence" in invocation.stdout
+    assert "Traceback" not in invocation.output

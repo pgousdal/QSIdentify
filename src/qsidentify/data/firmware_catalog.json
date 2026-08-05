@@ -1,0 +1,97 @@
+{
+  "catalog_version": "2026.08",
+  "entries": [
+    {
+      "id": "egzumer-legacy",
+      "name": "Egzumer custom firmware",
+      "notes": [
+        "Firmware flashing can render the radio unbootable.",
+        "Do not use for newer MCU revisions unless the project explicitly adds support."
+      ],
+      "project": "egzumer/uv-k5-firmware-custom",
+      "requires_matching_chirp_driver": false,
+      "risk": "high",
+      "sources": [
+        {
+          "notes": "Compatibility metadata was manually curated and may become stale.",
+          "observed_at": "2026-08-05",
+          "project": "egzumer/uv-k5-firmware-custom",
+          "reference": "project compatibility documentation",
+          "source_type": "project-metadata"
+        }
+      ],
+      "status": "known-project",
+      "supported_mcus": [
+        "DP32G030"
+      ],
+      "supported_revisions": [
+        "legacy-v1"
+      ],
+      "unsupported_revisions": [
+        "v2-py32f030",
+        "v3-py32f071"
+      ]
+    },
+    {
+      "id": "f4hwn-legacy",
+      "name": "F4HWN custom firmware",
+      "notes": [],
+      "project": "armel/uv-k5-firmware-custom",
+      "requires_matching_chirp_driver": true,
+      "risk": "high",
+      "sources": [
+        {
+          "notes": "Compatibility metadata was manually curated and may become stale.",
+          "observed_at": "2026-08-05",
+          "project": "armel/uv-k5-firmware-custom",
+          "reference": "project compatibility documentation",
+          "source_type": "project-metadata"
+        }
+      ],
+      "status": "known-project",
+      "supported_mcus": [
+        "DP32G030"
+      ],
+      "supported_revisions": [
+        "legacy-v1"
+      ],
+      "unsupported_revisions": [
+        "v2-py32f030",
+        "v3-py32f071"
+      ]
+    },
+    {
+      "id": "f4hwn-fusion-v3",
+      "name": "F4HWN Fusion for UV-K5 V3",
+      "notes": [
+        "Use only the build explicitly intended for UV-K5 V3.",
+        "Memory layout changes may require a full reset and matching CHIRP driver."
+      ],
+      "project": "armel/uv-k1-k5v3-firmware-custom",
+      "requires_matching_chirp_driver": true,
+      "risk": "high",
+      "sources": [
+        {
+          "notes": "Compatibility metadata was manually curated and may become stale.",
+          "observed_at": "2026-08-05",
+          "project": "armel/uv-k1-k5v3-firmware-custom",
+          "reference": "project compatibility documentation",
+          "source_type": "project-metadata"
+        }
+      ],
+      "status": "known-project",
+      "supported_mcus": [
+        "PY32F071"
+      ],
+      "supported_revisions": [
+        "v3-py32f071"
+      ],
+      "unsupported_revisions": [
+        "legacy-v1",
+        "v2-py32f030"
+      ]
+    }
+  ],
+  "generated_at": null,
+  "schema_version": 1
+}

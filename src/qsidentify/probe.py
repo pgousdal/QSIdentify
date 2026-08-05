@@ -152,9 +152,7 @@ def probe_port(
     }
     if serial_factory is not None:
         kwargs["serial_factory"] = serial_factory
-    serial_exchange = exchange(
-        port.device, command.payload, command.encoded_frame(), **kwargs
-    )
+    serial_exchange = exchange(port.device, command.payload, command.encoded_frame(), **kwargs)
     return _result(port, serial_exchange, baud_rate)
 
 

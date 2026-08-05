@@ -161,9 +161,7 @@ def test_response_size_limit() -> None:
 def test_line_state_and_settle_delay_are_applied_once() -> None:
     fake = FakeSerial([])
     clock = Clock()
-    result = run_exchange(
-        fake, clock=clock, dtr=LineSetting.OFF, rts=LineSetting.ON
-    )
+    result = run_exchange(fake, clock=clock, dtr=LineSetting.OFF, rts=LineSetting.ON)
     assert result.line_state.dtr is False and result.line_state.rts is True
     assert fake.dtr is False and fake.rts is True
     assert clock.sleeps == [0.1]

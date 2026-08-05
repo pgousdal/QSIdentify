@@ -175,9 +175,7 @@ def _report(raw: dict[str, Any]) -> ProbeReport:
     try:
         confidence = Confidence(_required(raw, "confidence", str))
         message_type = MessageType(_required(raw, "message_type", str))
-        transport = TransportClassification(
-            raw.get("transport_classification", "no-response")
-        )
+        transport = TransportClassification(raw.get("transport_classification", "no-response"))
     except ValueError as exc:
         raise CaptureError(f"Invalid report enum value: {exc}") from exc
     evidence_raw = _required(raw, "evidence", list)
@@ -356,14 +354,12 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
         if _hex(raw, field) != expected:
             _fail(f"Capture field '{field}' does not match the raw response.")
     stored_echoes = tuple(
-        _hex({"item": item}, "item")
-        for item in _required(raw, "echo_frames_hex", list)
+        _hex({"item": item}, "item") for item in _required(raw, "echo_frames_hex", list)
     )
     if stored_echoes != tuple(item.hex() for item in analysis.echo_frames):
         _fail("Stored echo frames do not match the raw response.")
     stored_valid = tuple(
-        _hex({"item": item}, "item")
-        for item in _required(raw, "decoded_valid_frames_hex", list)
+        _hex({"item": item}, "item") for item in _required(raw, "decoded_valid_frames_hex", list)
     )
     if stored_valid != tuple(item.original.hex() for item in analysis.valid_response_frames):
         _fail("Stored valid frames do not match the raw response.")
@@ -372,9 +368,7 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
         if line.get(field) is not None and not isinstance(line.get(field), bool):
             _fail(f"Line state '{field}' must be boolean or null.")
     report = _report(_mapping(_required(raw, "probe_report", dict), "probe_report"))
-    serial_raw = _mapping(
-        _required(raw, "serial_configuration", dict), "serial_configuration"
-    )
+    serial_raw = _mapping(_required(raw, "serial_configuration", dict), "serial_configuration")
     serial_configuration = SerialConfiguration(
         bytesize=_required(serial_raw, "bytesize", int),
         parity=_required(serial_raw, "parity", str),
@@ -441,7 +435,5 @@ def read_capture(path: Path) -> Capture:
     raw = _mapping(parsed, "root")
     schema = _required(raw, "schema_version", int)
     if schema not in SUPPORTED_CAPTURE_SCHEMAS:
-        raise CaptureError(
-            f"Unsupported capture schema version {schema}; supported: 1 and 2."
-        )
+        raise CaptureError(f"Unsupported capture schema version {schema}; supported: 1 and 2.")
     return _read_v1(raw) if schema == 1 else _read_v2(raw)

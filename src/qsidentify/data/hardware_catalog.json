@@ -1,0 +1,75 @@
+{
+  "records": [
+    {
+      "evidence_requirements": [
+        "A directly inspected V1 or legacy PCB/revision marking",
+        "An independently verified DP32G030 MCU marking"
+      ],
+      "id": "legacy-v1",
+      "identification_notes": [
+        "Firmware strings and marketed model names do not establish this revision."
+      ],
+      "known_bootloaders": [],
+      "manufacturer": "Quansheng",
+      "marketed_models": [
+        "UV-K5 family"
+      ],
+      "mcu": "DP32G030",
+      "pcb_markings": [
+        "V1",
+        "legacy"
+      ],
+      "revision": "Legacy/V1",
+      "source_references": [
+        "QSIdentify curated hardware registry 2026.08"
+      ]
+    },
+    {
+      "evidence_requirements": [
+        "A directly inspected V2 PCB/revision marking",
+        "An independently verified PY32F030 MCU marking"
+      ],
+      "id": "v2-py32f030",
+      "identification_notes": [
+        "Marketing names shared with older radios do not establish V2 hardware."
+      ],
+      "known_bootloaders": [],
+      "manufacturer": "Quansheng",
+      "marketed_models": [
+        "UV-K5 family"
+      ],
+      "mcu": "PY32F030",
+      "pcb_markings": [
+        "V2"
+      ],
+      "revision": "V2",
+      "source_references": [
+        "QSIdentify curated hardware registry 2026.08"
+      ]
+    },
+    {
+      "evidence_requirements": [
+        "A directly inspected V3 PCB/revision marking",
+        "An independently verified PY32F071 MCU marking"
+      ],
+      "id": "v3-py32f071",
+      "identification_notes": [
+        "A UV-K5 family label alone does not establish V3 hardware."
+      ],
+      "known_bootloaders": [],
+      "manufacturer": "Quansheng",
+      "marketed_models": [
+        "UV-K5 V3 family"
+      ],
+      "mcu": "PY32F071",
+      "pcb_markings": [
+        "V3"
+      ],
+      "revision": "V3",
+      "source_references": [
+        "QSIdentify curated hardware registry 2026.08"
+      ]
+    }
+  ],
+  "schema_version": 1
+}

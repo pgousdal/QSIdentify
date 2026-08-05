@@ -50,9 +50,7 @@ def test_identification_frame_known_vector() -> None:
 
 
 def test_known_firmware_response_vector() -> None:
-    frame = bytes.fromhex(
-        "ab cd 0d 00 03 69 7f d3 71 a3 23 70 10 1b e7 77 13 7f c0 dc ba"
-    )
+    frame = bytes.fromhex("ab cd 0d 00 03 69 7f d3 71 a3 23 70 10 1b e7 77 13 7f c0 dc ba")
     decoded = decode_frame(frame)
     assert decoded.payload == bytes.fromhex("15 05") + b"k5_2.01.27\x00"
     assert decoded.checksum_status is ChecksumStatus.VALID

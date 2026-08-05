@@ -10,6 +10,7 @@ from qsidentify.protocol.commands import ALLOWLIST
 def test_all_commands_are_read_only() -> None:
     assert ALLOWLIST
     assert all(command.safety is SafetyClass.READ_ONLY for command in ALLOWLIST)
+    assert [command.name for command in ALLOWLIST] == ["identify-handshake"]
 
 
 def test_no_write_like_command_names() -> None:

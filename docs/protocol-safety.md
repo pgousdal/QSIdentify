@@ -25,3 +25,8 @@ reads. Tests inject fake serial connections and never require hardware.
 states across at most three settle delays and always uses the same allowlisted
 identification command. DTR and RTS are applied once per attempt; no state is
 claimed to be universally correct.
+
+M0.3 does not add any serial command. Its firmware advisory reads existing
+captures, packaged JSON metadata and explicit user input only. It cannot fetch,
+read, decrypt, pack, unpack, modify, select, upload or flash firmware. It does
+not invoke browser flashers, vendor tools, k5prog, or any comparable utility.

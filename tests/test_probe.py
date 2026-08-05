@@ -73,8 +73,7 @@ def test_probe_uses_valid_response_after_echo() -> None:
     response = encode_frame(b"\x15\x05V1.0\x00")
     result = run_probe(IDENTIFY_HANDSHAKE.encoded_frame() + response)
     assert (
-        result.report.transport_classification
-        is TransportClassification.ECHO_FOLLOWED_BY_RESPONSE
+        result.report.transport_classification is TransportClassification.ECHO_FOLLOWED_BY_RESPONSE
     )
     assert result.report.message_type is MessageType.FIRMWARE_IDENTIFICATION
     assert result.report.reported_version == "V1.0"

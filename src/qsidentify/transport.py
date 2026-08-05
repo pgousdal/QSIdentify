@@ -182,9 +182,7 @@ def collect_stream(
             received_at = monotonic()
             raw.extend(chunk)
             if len(raw) > max_response_size:
-                raise ResponseTooLargeError(
-                    f"Serial response exceeded {max_response_size} bytes."
-                )
+                raise ResponseTooLargeError(f"Serial response exceeded {max_response_size} bytes.")
             chunks.append(
                 ReadChunk(
                     sequence=len(chunks) + 1,

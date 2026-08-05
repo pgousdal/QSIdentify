@@ -45,6 +45,4 @@ def choose_auto_port() -> PortInfo:
         return preferred[0]
     if len(ports) == 1:
         return ports[0]
-    raise RuntimeError(
-        "Multiple candidate serial ports were found. Specify the port explicitly."
-    )
+    raise RuntimeError("Multiple candidate serial ports were found. Specify the port explicitly.")

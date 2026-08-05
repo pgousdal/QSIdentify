@@ -11,7 +11,9 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from .advisory import FirmwareAdvisory, HardwareInput, build_advisory
 from .capture import CaptureError, build_capture, read_capture, write_capture
+from .catalog import CatalogError, load_firmware_catalog, load_hardware_records, validate_catalogs
 from .comparison import compare_captures
 from .doctor import run_checks
 from .models import DecodedResponse, LineSetting, MessageType, ProbeResult
@@ -47,6 +49,66 @@ def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
 
+def _hardware_input(
+    model: str | None,
+    hardware_revision: str | None,
+    mcu: str | None,
+    pcb_marking: str | None,
+) -> HardwareInput:
+    return HardwareInput(model, hardware_revision, mcu, pcb_marking)
+
+
+def _print_advisory(advisory: FirmwareAdvisory) -> None:
+    console.print("\n[bold]Firmware advisory[/bold]")
+    console.print(f"  Observed firmware:   {advisory.observed_firmware or 'unknown'}")
+    console.print(f"  Protocol family:     {advisory.protocol_family or 'unknown'}")
+    model_suffix = " (user supplied)" if advisory.marketed_model else ""
+    console.print(f"  Marketed model:      {advisory.marketed_model or 'unknown'}{model_suffix}")
+    revision_suffix = (
+        " (user supplied)"
+        if advisory.confidence.hardware_revision.value == "user-supplied"
+        else " (catalog inference)"
+        if advisory.confidence.hardware_revision.value == "database-inference"
+        else ""
+    )
+    console.print(
+        f"  Hardware revision:   {advisory.hardware_revision or 'unknown'}{revision_suffix}"
+    )
+    mcu_suffix = (
+        " (user supplied)"
+        if advisory.confidence.mcu_family.value == "user-supplied"
+        else " (catalog inference)"
+        if advisory.confidence.mcu_family.value == "database-inference"
+        else ""
+    )
+    console.print(f"  MCU:                 {advisory.mcu or 'unknown'}{mcu_suffix}")
+    console.print("\n  [bold]Confidence[/bold]")
+    confidence_rows = (
+        ("Transport", advisory.confidence.serial_transport),
+        ("Protocol", advisory.confidence.protocol_family),
+        ("Firmware version", advisory.confidence.firmware_version),
+        ("Model", advisory.confidence.radio_model),
+        ("Hardware revision", advisory.confidence.hardware_revision),
+        ("MCU family", advisory.confidence.mcu_family),
+        ("FW compatibility", advisory.confidence.firmware_compatibility),
+    )
+    for label, confidence in confidence_rows:
+        console.print(f"    {label + ':':<20}{confidence.value}")
+    for entry in advisory.entries:
+        console.print(f"\n  [bold]{entry.name}[/bold]")
+        console.print(f"    Compatibility:     {entry.compatibility.value}")
+        for reason in entry.reasons:
+            console.print(f"    Reason:            {reason}")
+    console.print("\n  [bold]Action required[/bold]")
+    console.print(
+        "    Inspect the label and PCB/revision marking under the battery or provide an "
+        "independently verified MCU/revision before selecting firmware."
+    )
+    console.print("\n  [bold]Safety[/bold]")
+    for warning in advisory.warnings:
+        console.print(f"    {warning}")
+
+
 @app.command("ports")
 def ports_command() -> None:
     ports = list_serial_ports()
@@ -75,8 +137,7 @@ def _print_result(result: ProbeResult, *, trace: bool) -> None:
     console.print(f"  Response bytes:    {len(result.exchange.response)}")
     console.print(f"  Classification:    {report.transport_classification.value}")
     console.print(
-        f"  DTR / RTS:         {result.exchange.line_state.dtr} / "
-        f"{result.exchange.line_state.rts}"
+        f"  DTR / RTS:         {result.exchange.line_state.dtr} / {result.exchange.line_state.rts}"
     )
     console.print("\n[bold]Protocol[/bold]")
     console.print(f"  Frame detected:    {_yes_no(report.frame_detected)}")
@@ -134,6 +195,11 @@ def probe_command(
     trace: Annotated[bool, typer.Option("--trace")] = False,
     as_json: Annotated[bool, typer.Option("--json")] = False,
     capture_path: Annotated[Path | None, typer.Option("--capture")] = None,
+    firmware_advice: Annotated[bool, typer.Option("--firmware-advice")] = False,
+    model: Annotated[str | None, typer.Option("--model")] = None,
+    hardware_revision: Annotated[str | None, typer.Option("--hardware-revision")] = None,
+    mcu: Annotated[str | None, typer.Option("--mcu")] = None,
+    pcb_marking: Annotated[str | None, typer.Option("--pcb-marking")] = None,
 ) -> None:
     if auto and device:
         raise typer.BadParameter("Use either a device argument or --auto, not both.")
@@ -155,12 +221,29 @@ def probe_command(
     except (RuntimeError, TransportError, OSError) as exc:
         error_console.print(f"Probe failed: {exc}")
         raise typer.Exit(2) from None
+    supplied = _hardware_input(model, hardware_revision, mcu, pcb_marking)
+    try:
+        advisory = (
+            build_advisory(build_capture(result), supplied)
+            if firmware_advice or any((model, hardware_revision, mcu, pcb_marking))
+            else None
+        )
+    except CatalogError as exc:
+        error_console.print(f"Firmware advice failed: {exc}")
+        raise typer.Exit(3) from None
     if as_json:
-        sys.stdout.write(json.dumps(result.report.to_dict(), sort_keys=True) + "\n")
+        output = result.report.to_dict()
+        if advisory is not None:
+            output["firmware_advisory"] = advisory.to_dict()
+        sys.stdout.write(json.dumps(output, sort_keys=True) + "\n")
     else:
         if capture_path is not None:
             console.print(f"Capture: {capture_path}")
         _print_result(result, trace=trace)
+        if advisory is not None:
+            _print_advisory(advisory)
+    if advisory is not None and advisory.conflicting:
+        raise typer.Exit(2)
     if result.report.message_type is MessageType.NO_RESPONSE:
         raise typer.Exit(1)
     if result.report.message_type in {
@@ -331,6 +414,81 @@ def compare_command(paths: Annotated[list[Path], typer.Argument()]) -> None:
     console.print(f"Common positions:  {len(comparison.common_positions)}")
     frequency = " ".join(f"{value:02x}:{count}" for value, count in comparison.byte_frequency)
     console.print(f"Byte frequency:    {frequency or '-'}")
+
+
+@app.command("firmware-advice")
+def firmware_advice_command(
+    path: Path,
+    model: Annotated[str | None, typer.Option("--model")] = None,
+    hardware_revision: Annotated[str | None, typer.Option("--hardware-revision")] = None,
+    mcu: Annotated[str | None, typer.Option("--mcu")] = None,
+    pcb_marking: Annotated[str | None, typer.Option("--pcb-marking")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        capture = read_capture(path)
+        advisory = build_advisory(
+            capture, _hardware_input(model, hardware_revision, mcu, pcb_marking)
+        )
+    except (CaptureError, CatalogError) as exc:
+        error_console.print(f"Firmware advice failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(
+            json.dumps({"firmware_advisory": advisory.to_dict()}, sort_keys=True) + "\n"
+        )
+    else:
+        _print_advisory(advisory)
+    if advisory.conflicting:
+        raise typer.Exit(2)
+
+
+@app.command("firmware-list")
+def firmware_list_command() -> None:
+    try:
+        catalog = load_firmware_catalog()
+    except CatalogError as exc:
+        error_console.print(f"Firmware catalog failed: {exc}")
+        raise typer.Exit(3) from None
+    table = Table(title=f"Firmware catalog {catalog.catalog_version}")
+    for column in ("ID", "Supported MCU", "Status", "Project"):
+        table.add_column(column)
+    for entry in catalog.entries:
+        table.add_row(entry.id, ", ".join(entry.supported_mcus), entry.status, entry.project)
+    console.print(table)
+
+
+@app.command("hardware-list")
+def hardware_list_command() -> None:
+    try:
+        records = load_hardware_records()
+    except CatalogError as exc:
+        error_console.print(f"Hardware catalog failed: {exc}")
+        raise typer.Exit(3) from None
+    table = Table(title="Known hardware records")
+    for column in ("ID", "Revision", "MCU", "Evidence required"):
+        table.add_column(column)
+    for record in records:
+        table.add_row(
+            record.id,
+            record.revision,
+            record.mcu,
+            "; ".join(record.evidence_requirements),
+        )
+    console.print(table)
+
+
+@app.command("firmware-catalog-validate")
+def firmware_catalog_validate_command() -> None:
+    try:
+        records, catalog = validate_catalogs()
+    except CatalogError as exc:
+        error_console.print(f"Firmware catalog invalid: {exc}")
+        raise typer.Exit(3) from None
+    console.print(
+        f"Firmware catalog {catalog.catalog_version} is valid: "
+        f"{len(catalog.entries)} entries, {len(records)} hardware records."
+    )
 
 
 @app.command("doctor")

@@ -2,10 +2,14 @@
 
 **Read-only identification and diagnostics for Quansheng radios.**
 
-QSIdentify 0.2.0 sends one allowlisted, read-only identification query and
+QSIdentify 0.3.0 sends one allowlisted, read-only identification query and
 records the complete bounded serial stream. It separates adapter echo, framed
 responses, null bytes, incomplete candidates and unknown binary evidence
 without claiming that a firmware string proves a hardware revision.
+
+M0.3 adds an entirely offline firmware compatibility advisory. It compares
+captures and explicit user-supplied hardware details with a curated local
+catalog. It never downloads, modifies, selects, packages, or flashes firmware.
 
 ## M0.2 status
 
@@ -42,13 +46,17 @@ qsidentify monitor /dev/ttyUSB0 --duration 5 --dtr off --rts off --trace
 qsidentify matrix /dev/ttyUSB0 --capture-dir captures/matrix
 qsidentify decode capture.json
 qsidentify compare capture1.json capture2.json
+qsidentify firmware-advice capture.json --model "UV-K5(8)"
+qsidentify firmware-list
+qsidentify hardware-list
+qsidentify firmware-catalog-validate
 qsidentify doctor
 ```
 
 Example summary:
 
 ```text
-QSIdentify 0.2.0
+QSIdentify 0.3.0
 
 Transport
   Port:              /dev/ttyUSB0
@@ -103,7 +111,9 @@ git diff --check
 All tests use generated fixtures and fake serial connections; no radio is
 required. See `docs/protocol.md`, `docs/protocol-safety.md`, and
 `docs/capture-format.md`. Transport evidence and physical observations are in
-`docs/transport-diagnostics.md`.
+`docs/transport-diagnostics.md`. Firmware advisory limitations are documented
+in `docs/firmware-advisory.md`, `docs/hardware-evidence.md`, and
+`docs/firmware-catalog.md`.
 
 ## License
 
