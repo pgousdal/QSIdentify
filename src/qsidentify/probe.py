@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from . import __version__
+from .drivers import Driver, default_driver
 from .models import (
     Confidence,
     DecodedResponse,
@@ -13,8 +14,6 @@ from .models import (
     SafetyClass,
     TransportClassification,
 )
-from .protocol.commands import IDENTIFY_HANDSHAKE
-from .protocol.decoder import decode_response
 from .transport import (
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_SETTLE_DELAY,
@@ -25,10 +24,15 @@ from .transport import (
 )
 
 
-def _transport_response(result_class: TransportClassification, raw: bytes) -> DecodedResponse:
+def _transport_response(
+    result_class: TransportClassification,
+    raw: bytes,
+    driver: Driver,
+    candidate: bytes | None = None,
+) -> DecodedResponse:
     evidence = (Evidence("raw-response-hex", raw.hex(), "serial-stream"),) if raw else ()
     if result_class is TransportClassification.NO_RESPONSE:
-        return decode_response(b"")
+        return driver.decode(b"")
     if result_class in {
         TransportClassification.ECHO_ONLY,
         TransportClassification.TRANSMIT_ECHO,
@@ -74,10 +78,9 @@ def _transport_response(result_class: TransportClassification, raw: bytes) -> De
             ),
         )
     if result_class is TransportClassification.INCOMPLETE_RESPONSE:
-        return decode_response(raw, incomplete=True)
+        return driver.decode(candidate or raw, incomplete=True)
     if result_class is TransportClassification.INVALID_FRAME:
-        candidate_offset = raw.find(bytes.fromhex("ab cd"))
-        return decode_response(raw[candidate_offset:])
+        return driver.decode(candidate or raw)
     return DecodedResponse(
         None,
         None,
@@ -90,12 +93,21 @@ def _transport_response(result_class: TransportClassification, raw: bytes) -> De
     )
 
 
-def _result(port: PortInfo, exchange_result, baud_rate: int) -> ProbeResult:  # type: ignore[no-untyped-def]
+def _result(port: PortInfo, exchange_result, baud_rate: int, driver: Driver) -> ProbeResult:  # type: ignore[no-untyped-def]
     analysis = exchange_result.analysis
     if analysis.valid_response_frames:
-        decoded = decode_response(analysis.valid_response_frames[0].original)
+        decoded = driver.decode(analysis.valid_response_frames[0].original)
     else:
-        decoded = _transport_response(analysis.classification, exchange_result.raw_response)
+        candidate = next(
+            (item.data for item in analysis.candidates if not item.echo),
+            None,
+        )
+        decoded = _transport_response(
+            analysis.classification,
+            exchange_result.raw_response,
+            driver,
+            candidate,
+        )
     operating_mode = (
         "firmware-bootloader"
         if decoded.message_type is MessageType.BOOTLOADER_RESPONSE
@@ -125,7 +137,7 @@ def _result(port: PortInfo, exchange_result, baud_rate: int) -> ProbeResult:  # 
         evidence=decoded.evidence,
         warnings=decoded.warnings,
     )
-    return ProbeResult(report, exchange_result, decoded)
+    return ProbeResult(report, exchange_result, decoded, driver.info.id, driver.info.version)
 
 
 def probe_port(
@@ -138,8 +150,10 @@ def probe_port(
     dtr: LineSetting = LineSetting.AUTO,
     rts: LineSetting = LineSetting.AUTO,
     serial_factory: SerialFactory | None = None,
+    driver: Driver | None = None,
 ) -> ProbeResult:
-    command = IDENTIFY_HANDSHAKE
+    driver = driver or default_driver()
+    command = driver.identify()
     if command.safety is not SafetyClass.READ_ONLY:
         raise RuntimeError("Refusing to transmit a command that is not read-only.")
     kwargs: dict[str, object] = {
@@ -149,11 +163,12 @@ def probe_port(
         "settle_delay": settle_delay,
         "dtr": dtr,
         "rts": rts,
+        "stream_analyzer": driver.analyze_stream,
     }
     if serial_factory is not None:
         kwargs["serial_factory"] = serial_factory
-    serial_exchange = exchange(port.device, command.payload, command.encoded_frame(), **kwargs)
-    return _result(port, serial_exchange, baud_rate)
+    serial_exchange = exchange(port.device, command.payload, driver.encode(command), **kwargs)
+    return _result(port, serial_exchange, baud_rate, driver)
 
 
 def monitor_port(
@@ -165,7 +180,9 @@ def monitor_port(
     dtr: LineSetting = LineSetting.AUTO,
     rts: LineSetting = LineSetting.AUTO,
     serial_factory: SerialFactory | None = None,
+    driver: Driver | None = None,
 ) -> ProbeResult:
+    driver = driver or default_driver()
     kwargs: dict[str, object] = {
         "baud_rate": baud_rate,
         "total_timeout": duration,
@@ -173,7 +190,8 @@ def monitor_port(
         "settle_delay": 0.0,
         "dtr": dtr,
         "rts": rts,
+        "stream_analyzer": driver.analyze_stream,
     }
     if serial_factory is not None:
         kwargs["serial_factory"] = serial_factory
-    return _result(port, monitor(port.device, **kwargs), baud_rate)
+    return _result(port, monitor(port.device, **kwargs), baud_rate, driver)

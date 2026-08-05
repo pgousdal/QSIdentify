@@ -29,8 +29,10 @@ Safety is more important than broad device support.
 - `models.py` — immutable report and capture models
 - `capture.py` — deterministic JSON serialization
 - `doctor.py` — local environment checks
-- `advisory.py` — pure offline compatibility decisions
-- `catalog.py` — strict local hardware and firmware catalog loading
+- `drivers/base.py` — stable immutable driver interface
+- `drivers/registry.py` — deterministic compiled-in driver registry
+- `drivers/quansheng/` — Quansheng protocol, commands, catalogs and advisory
+- `advisory.py`, `catalog.py`, `protocol/` — backwards-compatible import shims
 
 Protocol decoding should remain side-effect free.
 
@@ -46,6 +48,11 @@ M0.3 advisory analysis is offline only. Firmware strings and marketed model
 names never establish a hardware revision or MCU. User declarations and local
 catalog inferences must remain visibly distinct from electronically observed
 evidence.
+
+M1.0 drivers never perform serial I/O. They return allowlisted commands and
+purely interpret transport evidence supplied by core orchestration. Runtime
+discovery, entry points, dynamic external imports and plugin downloads are
+forbidden.
 
 ## Coding requirements
 

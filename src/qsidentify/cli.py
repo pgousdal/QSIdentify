@@ -4,19 +4,18 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from . import __version__
-from .advisory import FirmwareAdvisory, HardwareInput, build_advisory
 from .capture import CaptureError, build_capture, read_capture, write_capture
-from .catalog import CatalogError, load_firmware_catalog, load_hardware_records, validate_catalogs
 from .comparison import compare_captures
 from .doctor import run_checks
-from .models import DecodedResponse, LineSetting, MessageType, ProbeResult
+from .drivers import default_driver, drivers, get_driver
+from .models import Capture, DecodedResponse, LineSetting, MessageType, ProbeResult
 from .ports import choose_auto_port, find_port, list_serial_ports
 from .probe import monitor_port, probe_port
 from .transport import TransportError
@@ -54,11 +53,23 @@ def _hardware_input(
     hardware_revision: str | None,
     mcu: str | None,
     pcb_marking: str | None,
-) -> HardwareInput:
-    return HardwareInput(model, hardware_revision, mcu, pcb_marking)
+) -> dict[str, str | None]:
+    return {
+        "model": model,
+        "hardware_revision": hardware_revision,
+        "mcu": mcu,
+        "pcb_marking": pcb_marking,
+    }
 
 
-def _print_advisory(advisory: FirmwareAdvisory) -> None:
+def _firmware_advisory(
+    capture: Capture,
+    hardware_input: dict[str, str | None],
+) -> Any:
+    return get_driver(capture.driver_id).firmware_advice(capture, hardware_input)
+
+
+def _print_advisory(advisory: Any) -> None:
     console.print("\n[bold]Firmware advisory[/bold]")
     console.print(f"  Observed firmware:   {advisory.observed_firmware or 'unknown'}")
     console.print(f"  Protocol family:     {advisory.protocol_family or 'unknown'}")
@@ -123,6 +134,44 @@ def ports_command() -> None:
             port.device, port.description or "-", port.vid_pid or "-", port.manufacturer or "-"
         )
     console.print(table)
+
+
+@app.command("drivers")
+def drivers_command() -> None:
+    table = Table(title="Built-in radio drivers")
+    for column in ("ID", "Version", "Protocols", "Safety"):
+        table.add_column(column)
+    for driver in drivers():
+        table.add_row(
+            driver.info.id,
+            driver.info.version,
+            ", ".join(driver.supported_protocols()),
+            driver.info.safety,
+        )
+    console.print(table)
+
+
+@app.command("driver-info")
+def driver_info_command(driver_id: str) -> None:
+    try:
+        driver = get_driver(driver_id)
+    except KeyError as exc:
+        error_console.print(str(exc))
+        raise typer.Exit(3) from None
+    console.print("[bold]Driver[/bold]")
+    console.print(f"  ID:         {driver.info.id}")
+    console.print(f"  Version:    {driver.info.version}")
+    console.print("[bold]Protocols[/bold]")
+    for protocol in driver.supported_protocols():
+        console.print(f"  {protocol}")
+    console.print("[bold]Models[/bold]")
+    for model in driver.supported_models():
+        console.print(f"  {model}")
+    console.print("[bold]Commands[/bold]")
+    for command in driver.supported_commands():
+        console.print(f"  {command.name} ({command.safety.value})")
+    console.print("[bold]Safety[/bold]")
+    console.print(f"  {driver.info.safety}")
 
 
 def _print_result(result: ProbeResult, *, trace: bool) -> None:
@@ -200,6 +249,7 @@ def probe_command(
     hardware_revision: Annotated[str | None, typer.Option("--hardware-revision")] = None,
     mcu: Annotated[str | None, typer.Option("--mcu")] = None,
     pcb_marking: Annotated[str | None, typer.Option("--pcb-marking")] = None,
+    driver_id: Annotated[str, typer.Option("--driver")] = "quansheng",
 ) -> None:
     if auto and device:
         raise typer.BadParameter("Use either a device argument or --auto, not both.")
@@ -207,8 +257,10 @@ def probe_command(
         raise typer.BadParameter("Specify a serial device or use --auto.")
     try:
         port = choose_auto_port() if auto else find_port(device or "")
+        driver = get_driver(driver_id)
         result = probe_port(
             port,
+            driver=driver,
             baud_rate=baud_rate,
             timeout=timeout,
             idle_timeout=idle_timeout,
@@ -218,17 +270,17 @@ def probe_command(
         )
         if capture_path is not None:
             write_capture(capture_path, build_capture(result))
-    except (RuntimeError, TransportError, OSError) as exc:
+    except (KeyError, RuntimeError, TransportError, OSError) as exc:
         error_console.print(f"Probe failed: {exc}")
         raise typer.Exit(2) from None
     supplied = _hardware_input(model, hardware_revision, mcu, pcb_marking)
     try:
         advisory = (
-            build_advisory(build_capture(result), supplied)
+            _firmware_advisory(build_capture(result), supplied)
             if firmware_advice or any((model, hardware_revision, mcu, pcb_marking))
             else None
         )
-    except CatalogError as exc:
+    except ValueError as exc:
         error_console.print(f"Firmware advice failed: {exc}")
         raise typer.Exit(3) from None
     if as_json:
@@ -274,10 +326,12 @@ def monitor_command(
     trace: Annotated[bool, typer.Option("--trace")] = False,
     as_json: Annotated[bool, typer.Option("--json")] = False,
     capture_path: Annotated[Path | None, typer.Option("--capture")] = None,
+    driver_id: Annotated[str, typer.Option("--driver")] = "quansheng",
 ) -> None:
     try:
         result = monitor_port(
             find_port(device),
+            driver=get_driver(driver_id),
             baud_rate=baud_rate,
             duration=duration,
             idle_timeout=idle_timeout,
@@ -286,7 +340,7 @@ def monitor_command(
         )
         if capture_path is not None:
             write_capture(capture_path, build_capture(result))
-    except (RuntimeError, TransportError, OSError, ValueError) as exc:
+    except (KeyError, RuntimeError, TransportError, OSError, ValueError) as exc:
         error_console.print(f"Monitor failed: {exc}")
         raise typer.Exit(2) from None
     if as_json:
@@ -305,6 +359,7 @@ def matrix_command(
     idle_timeout: Annotated[float, typer.Option("--idle-timeout", min=0.001)] = 0.2,
     pause: Annotated[float, typer.Option("--pause", min=0.0)] = 0.25,
     capture_dir: Annotated[Path | None, typer.Option("--capture-dir")] = None,
+    driver_id: Annotated[str, typer.Option("--driver")] = "quansheng",
 ) -> None:
     delays = settle_delays or [0.1]
     if len(delays) > 3 or any(value < 0 for value in delays):
@@ -316,6 +371,11 @@ def matrix_command(
         (LineSetting.ON, LineSetting.ON),
     )
     port = find_port(device)
+    try:
+        driver = get_driver(driver_id)
+    except KeyError as exc:
+        error_console.print(f"Matrix failed: {exc}")
+        raise typer.Exit(2) from None
     attempt = 0
     for delay in delays:
         for dtr, rts in states:
@@ -323,6 +383,7 @@ def matrix_command(
             try:
                 result = probe_port(
                     port,
+                    driver=driver,
                     timeout=timeout,
                     idle_timeout=idle_timeout,
                     settle_delay=delay,
@@ -427,10 +488,10 @@ def firmware_advice_command(
 ) -> None:
     try:
         capture = read_capture(path)
-        advisory = build_advisory(
+        advisory = _firmware_advisory(
             capture, _hardware_input(model, hardware_revision, mcu, pcb_marking)
         )
-    except (CaptureError, CatalogError) as exc:
+    except (CaptureError, ValueError) as exc:
         error_console.print(f"Firmware advice failed: {exc}")
         raise typer.Exit(3) from None
     if as_json:
@@ -446,14 +507,15 @@ def firmware_advice_command(
 @app.command("firmware-list")
 def firmware_list_command() -> None:
     try:
-        catalog = load_firmware_catalog()
-    except CatalogError as exc:
+        driver = default_driver()
+        entries = driver.firmware_projects()
+    except ValueError as exc:
         error_console.print(f"Firmware catalog failed: {exc}")
         raise typer.Exit(3) from None
-    table = Table(title=f"Firmware catalog {catalog.catalog_version}")
+    table = Table(title=f"Firmware catalog ({driver.info.id})")
     for column in ("ID", "Supported MCU", "Status", "Project"):
         table.add_column(column)
-    for entry in catalog.entries:
+    for entry in entries:
         table.add_row(entry.id, ", ".join(entry.supported_mcus), entry.status, entry.project)
     console.print(table)
 
@@ -461,8 +523,8 @@ def firmware_list_command() -> None:
 @app.command("hardware-list")
 def hardware_list_command() -> None:
     try:
-        records = load_hardware_records()
-    except CatalogError as exc:
+        records = default_driver().hardware_records()
+    except ValueError as exc:
         error_console.print(f"Hardware catalog failed: {exc}")
         raise typer.Exit(3) from None
     table = Table(title="Known hardware records")
@@ -481,13 +543,14 @@ def hardware_list_command() -> None:
 @app.command("firmware-catalog-validate")
 def firmware_catalog_validate_command() -> None:
     try:
-        records, catalog = validate_catalogs()
-    except CatalogError as exc:
+        validation = default_driver().validate_catalog()
+    except ValueError as exc:
         error_console.print(f"Firmware catalog invalid: {exc}")
         raise typer.Exit(3) from None
     console.print(
-        f"Firmware catalog {catalog.catalog_version} is valid: "
-        f"{len(catalog.entries)} entries, {len(records)} hardware records."
+        f"Firmware catalog {validation.version} is valid: "
+        f"{validation.firmware_entries} entries, "
+        f"{validation.hardware_records} hardware records."
     )
 
 

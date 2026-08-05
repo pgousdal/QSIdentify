@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0 - 2026-08-05
+
+- introduce a stable, immutable driver interface and deterministic built-in registry
+- move Quansheng protocol, commands, catalogs and advisory logic into its driver
+- make transport analysis driver-injected and keep drivers free of serial I/O
+- add driver-aware capture schema v3 with v1/v2 loading compatibility
+- add `drivers`, `driver-info` and the public `identify()` Python API
+
 ## 0.3.0 - 2026-08-05
 
 - add a conservative offline firmware compatibility advisory

@@ -1,6 +1,6 @@
 # Offline firmware catalog
 
-`src/qsidentify/data/firmware_catalog.json` is schema version 1, catalog version
+`src/qsidentify/drivers/quansheng/data/firmware_catalog.json` is schema version 1, catalog version
 `2026.08`. It is human-reviewed metadata, not automatically discovered truth.
 Each entry records a project name, supported MCU and revision IDs, explicitly
 unsupported revisions, CHIRP-driver requirements, risk notes and source

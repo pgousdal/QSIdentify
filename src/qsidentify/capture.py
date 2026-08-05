@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn, TypeVar
 
+from .drivers import get_driver
 from .models import (
     Capture,
     Confidence,
@@ -23,11 +24,9 @@ from .models import (
     SerialConfiguration,
     TransportClassification,
 )
-from .protocol.commands import ALLOWLIST
-from .protocol.stream import analyze_stream
 
-CAPTURE_SCHEMA_VERSION = 2
-SUPPORTED_CAPTURE_SCHEMAS = (1, 2)
+CAPTURE_SCHEMA_VERSION = 3
+SUPPORTED_CAPTURE_SCHEMAS = (1, 2, 3)
 T = TypeVar("T")
 
 
@@ -49,6 +48,8 @@ def build_capture(result: ProbeResult, *, created_utc: str | None = None) -> Cap
     port = _capture_safe_port(result.report.port)
     report = replace(result.report, port=port)
     transmit = exchange.operation == "probe"
+    driver = get_driver(result.driver_id)
+    command = driver.identify() if transmit else None
     return Capture(
         schema_version=CAPTURE_SCHEMA_VERSION,
         created_utc=created_utc or datetime.now(UTC).replace(microsecond=0).isoformat(),
@@ -80,9 +81,11 @@ def build_capture(result: ProbeResult, *, created_utc: str | None = None) -> Cap
         report=report,
         safety={
             "classification": "read-only" if transmit else "passive-monitor",
-            "command": "identify-handshake" if transmit else "",
+            "command": command.name if command else "",
             "arbitrary_transmit": "disabled",
         },
+        driver_id=result.driver_id,
+        driver_version=result.driver_version,
     )
 
 
@@ -233,7 +236,8 @@ def _read_v1(raw: dict[str, Any]) -> Capture:
     framed = _hex(raw, "received_frame_hex")
     transmitted = _hex(raw, "encoded_transmitted_frame_hex")
     response = bytes.fromhex(leading + framed)
-    analysis = analyze_stream(response, bytes.fromhex(transmitted))
+    driver = get_driver("quansheng")
+    analysis = driver.analyze_stream(response, bytes.fromhex(transmitted))
     chunks = (ReadChunk(1, 0.0, response),) if response else ()
     return Capture(
         schema_version=1,
@@ -278,7 +282,15 @@ def _candidate(raw: dict[str, Any]) -> FrameCandidate:
     )
 
 
-def _read_v2(raw: dict[str, Any]) -> Capture:
+def _read_v2(raw: dict[str, Any], *, schema_version: int = 2) -> Capture:
+    driver_id = _required(raw, "driver_id", str) if schema_version >= 3 else "quansheng"
+    driver_version = _required(raw, "driver_version", str) if schema_version >= 3 else "1.0"
+    if not driver_id or not driver_version:
+        _fail("Capture driver identity fields must be non-empty.")
+    try:
+        driver = get_driver(driver_id)
+    except KeyError as exc:
+        raise CaptureError(str(exc)) from exc
     operation = _required(raw, "operation", str)
     transmit = _required(raw, "transmit_performed", bool)
     if operation not in {"probe", "monitor"}:
@@ -289,7 +301,7 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
     if not all(isinstance(value, str) for value in safety.values()):
         _fail("Capture safety values must be strings.")
     command = safety.get("command")
-    allowed_commands = {item.name: item for item in ALLOWLIST}
+    allowed_commands = {item.name: item for item in driver.supported_commands()}
     allowed = allowed_commands.get(command) if isinstance(command, str) else None
     if operation == "probe" and allowed is None:
         _fail("Probe capture must name an allowlisted command.")
@@ -299,7 +311,7 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
         _fail("Monitor capture cannot contain transmit bytes.")
     if operation == "probe":
         assert allowed is not None
-        if request != allowed.payload.hex() or transmitted != allowed.encoded_frame().hex():
+        if request != allowed.payload.hex() or transmitted != driver.encode(allowed).hex():
             _fail("Probe capture transmit bytes do not match its allowlisted command.")
         if safety.get("classification") != allowed.safety.value:
             _fail("Probe capture safety classification does not match its command.")
@@ -336,7 +348,7 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
         rts_setting = LineSetting(_required(raw, "rts_setting", str))
     except ValueError as exc:
         raise CaptureError(f"Invalid capture enum value: {exc}") from exc
-    analysis = analyze_stream(bytes.fromhex(raw_response), bytes.fromhex(transmitted))
+    analysis = driver.analyze_stream(bytes.fromhex(raw_response), bytes.fromhex(transmitted))
     candidate_shape = tuple(
         (item.offset, item.data, item.valid, item.echo, item.error) for item in analysis.candidates
     )
@@ -397,7 +409,7 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
     if report.frame_complete != bool(analysis.valid_response_frames):
         _fail("Probe report frame state does not match the stream analysis.")
     return Capture(
-        schema_version=2,
+        schema_version=schema_version,
         created_utc=_created(raw),
         qsidentify_version=version,
         operation=operation,
@@ -424,6 +436,8 @@ def _read_v2(raw: dict[str, Any]) -> Capture:
         stream_classification=stream_classification,
         report=report,
         safety={str(key): str(value) for key, value in safety.items()},
+        driver_id=driver_id,
+        driver_version=driver_version,
     )
 
 
@@ -435,5 +449,5 @@ def read_capture(path: Path) -> Capture:
     raw = _mapping(parsed, "root")
     schema = _required(raw, "schema_version", int)
     if schema not in SUPPORTED_CAPTURE_SCHEMAS:
-        raise CaptureError(f"Unsupported capture schema version {schema}; supported: 1 and 2.")
-    return _read_v1(raw) if schema == 1 else _read_v2(raw)
+        raise CaptureError(f"Unsupported capture schema version {schema}; supported: 1, 2 and 3.")
+    return _read_v1(raw) if schema == 1 else _read_v2(raw, schema_version=schema)

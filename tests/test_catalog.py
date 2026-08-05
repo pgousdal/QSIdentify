@@ -7,7 +7,7 @@ from qsidentify.catalog import CatalogError, load_firmware_catalog, load_hardwar
 
 
 def catalog_data() -> dict[str, object]:
-    path = Path("src/qsidentify/data/firmware_catalog.json")
+    path = Path("src/qsidentify/drivers/quansheng/data/firmware_catalog.json")
     return json.loads(path.read_text())  # type: ignore[no-any-return]
 
 

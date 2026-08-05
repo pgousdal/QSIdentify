@@ -11,11 +11,9 @@ import serial
 
 from . import __version__
 from .capture import CAPTURE_SCHEMA_VERSION
+from .drivers import default_driver
 from .models import SafetyClass
 from .ports import list_serial_ports
-from .protocol.commands import ALLOWLIST
-from .protocol.frame import decode_frame, encode_frame
-from .protocol.stream import analyze_stream
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,17 +26,21 @@ class DoctorCheck:
 
 def run_checks(*, capture_directory: Path | None = None) -> tuple[DoctorCheck, ...]:
     ports = list_serial_ports()
-    unsafe = [command.name for command in ALLOWLIST if command.safety is not SafetyClass.READ_ONLY]
-    test_payload = bytes.fromhex("14 05 04 00 6a 39 57 64")
-    protocol_ok = decode_frame(encode_frame(test_payload)).payload == test_payload
-    encoded = encode_frame(test_payload)
-    echo_ok = analyze_stream(encoded, encoded).classification.value == "echo-only"
-    null_ok = analyze_stream(b"\x00\x00", encoded).classification.value == "null-byte-response"
+    driver = default_driver()
+    commands = driver.supported_commands()
+    unsafe = [command.name for command in commands if command.safety is not SafetyClass.READ_ONLY]
+    command = driver.identify()
+    encoded = driver.encode(command)
+    protocol_ok = driver.decode(encoded).frame is not None
+    echo_ok = driver.analyze_stream(encoded, encoded).classification.value == "echo-only"
+    null_ok = (
+        driver.analyze_stream(b"\x00\x00", encoded).classification.value == "null-byte-response"
+    )
     inaccessible = [port.device for port in ports if not os.access(port.device, os.R_OK | os.W_OK)]
     directory = capture_directory or Path.cwd()
     return (
         DoctorCheck("Python", sys.version_info >= (3, 11), platform.python_version()),
-        DoctorCheck("Package version", __version__ == "0.3.0", __version__),
+        DoctorCheck("Package version", __version__ == "1.0.0", __version__),
         DoctorCheck("pyserial", bool(serial.VERSION), serial.VERSION),
         DoctorCheck(
             "Serial-port discovery",
@@ -56,15 +58,15 @@ def run_checks(*, capture_directory: Path | None = None) -> tuple[DoctorCheck, .
         ),
         DoctorCheck(
             "Command allowlist",
-            bool(ALLOWLIST) and not unsafe,
-            f"{len(ALLOWLIST)} read-only command(s)" if not unsafe else "Unsafe command detected",
+            bool(commands) and not unsafe,
+            f"{len(commands)} read-only command(s)" if not unsafe else "Unsafe command detected",
         ),
         DoctorCheck("Protocol self-test", protocol_ok, "Frame codec round trip"),
         DoctorCheck("Monotonic timer", callable(time.monotonic), "Available"),
         DoctorCheck("Echo detector", echo_ok, "Offline exact-frame fixture"),
         DoctorCheck("Null classifier", null_ok, "Offline zero-byte fixture"),
         DoctorCheck(
-            "Capture schema", CAPTURE_SCHEMA_VERSION == 2, f"Schema {CAPTURE_SCHEMA_VERSION}"
+            "Capture schema", CAPTURE_SCHEMA_VERSION == 3, f"Schema {CAPTURE_SCHEMA_VERSION}"
         ),
         DoctorCheck(
             "Capture directory",

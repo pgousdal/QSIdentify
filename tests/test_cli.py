@@ -62,7 +62,7 @@ def test_probe_json_stdout_contains_json_only(monkeypatch) -> None:  # type: ign
     monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: value)
     invocation = CliRunner().invoke(app, ["probe", "test-port", "--json"])
     assert invocation.exit_code == 1
-    assert json.loads(invocation.stdout)["qsidentify_version"] == "0.3.0"
+    assert json.loads(invocation.stdout)["qsidentify_version"] == "1.0.0"
     assert "QSIdentify" not in invocation.stdout
 
 
@@ -129,6 +129,18 @@ def test_offline_catalog_commands() -> None:
     assert "2026.08 is valid" in validation.stdout
     assert firmware.exit_code == 0 and "egzumer-legacy" in firmware.stdout
     assert hardware.exit_code == 0 and "DP32G030" in hardware.stdout
+
+
+def test_driver_commands_are_stable_and_offline() -> None:
+    runner = CliRunner()
+    listing = runner.invoke(app, ["drivers"])
+    detail = runner.invoke(app, ["driver-info", "quansheng"])
+    missing = runner.invoke(app, ["driver-info", "missing"])
+    assert listing.exit_code == 0 and "quansheng" in listing.stdout
+    assert detail.exit_code == 0
+    assert "Quansheng framed protocol" in detail.stdout
+    assert "identify-handshake" in detail.stdout
+    assert missing.exit_code == 3 and "Unknown driver" in missing.output
 
 
 def test_firmware_advice_json_is_json_only(tmp_path: Path) -> None:

@@ -78,7 +78,7 @@ def result_fixture(*, operation: str = "probe", response: bytes | None = None) -
     return ProbeResult(report, exchange, decoded)
 
 
-def test_v2_roundtrip_is_deterministic_and_preserves_stream(tmp_path: Path) -> None:
+def test_v3_roundtrip_is_deterministic_and_preserves_stream(tmp_path: Path) -> None:
     capture = build_capture(result_fixture(), created_utc="2026-08-04T12:00:00+00:00")
     first, second = tmp_path / "one.json", tmp_path / "two.json"
     write_capture(first, capture)
@@ -88,6 +88,20 @@ def test_v2_roundtrip_is_deterministic_and_preserves_stream(tmp_path: Path) -> N
     assert read_capture(first) == capture
     assert capture.raw_response_hex == result_fixture().exchange.raw_response.hex()
     assert capture.transmit_performed
+    assert capture.driver_id == "quansheng"
+    assert capture.driver_version == "1.0"
+
+
+def test_v2_capture_defaults_to_historical_quansheng_driver(tmp_path: Path) -> None:
+    data = build_capture(result_fixture(), created_utc="2026-08-04T12:00:00+00:00").to_dict()
+    data["schema_version"] = 2
+    data.pop("driver_id")
+    data.pop("driver_version")
+    path = tmp_path / "v2.json"
+    path.write_text(json.dumps(data))
+    loaded = read_capture(path)
+    assert loaded.schema_version == 2
+    assert loaded.driver_id == "quansheng"
 
 
 def test_monitor_capture_declares_no_transmit(tmp_path: Path) -> None:
@@ -114,6 +128,7 @@ def test_monitor_capture_declares_no_transmit(tmp_path: Path) -> None:
         lambda data: data["safety"].update(command="not-allowlisted"),
         lambda data: data.update(logical_request_payload_hex="00"),
         lambda data: data.update(encoded_transmitted_frame_hex="abcd"),
+        lambda data: data.update(driver_id="missing"),
         lambda data: data["safety"].update(classification="unsafe"),
         lambda data: data["probe_report"].update(transport_classification="null-byte-response"),
         lambda data: data["read_chunks"][0].update(monotonic_offset_ms=-1),

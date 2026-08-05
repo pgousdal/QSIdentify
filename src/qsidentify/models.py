@@ -89,10 +89,9 @@ class Command:
     description: str
 
     def encoded_frame(self) -> bytes:
-        # Local import keeps models independent of protocol implementation details.
-        from .protocol.frame import encode_frame
+        from .drivers import default_driver
 
-        return encode_frame(self.payload)
+        return default_driver().encode(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,6 +240,8 @@ class ProbeResult:
     report: ProbeReport
     exchange: Exchange
     decoded: DecodedResponse
+    driver_id: str = "quansheng"
+    driver_version: str = "1.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +273,8 @@ class Capture:
     stream_classification: TransportClassification
     report: ProbeReport
     safety: dict[str, str]
+    driver_id: str = "quansheng"
+    driver_version: str = "1.0"
 
     def to_dict(self) -> dict[str, Any]:
         return capture_to_dict(self)
@@ -360,6 +363,8 @@ def capture_to_dict(capture: Capture) -> dict[str, Any]:
         "created_utc": capture.created_utc,
         "decoded_valid_frames_hex": list(capture.decoded_valid_frames_hex),
         "dtr_setting": capture.dtr_setting.value,
+        "driver_id": capture.driver_id,
+        "driver_version": capture.driver_version,
         "encoded_transmitted_frame_hex": capture.encoded_transmitted_frame_hex,
         "echo_frames_hex": list(capture.echo_frames_hex),
         "idle_timeout": capture.idle_timeout,

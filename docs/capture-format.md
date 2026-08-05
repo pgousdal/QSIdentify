@@ -1,4 +1,4 @@
-# Capture format v2
+# Capture format
 
 Schema v2 is deterministic UTF-8 JSON with sorted keys, two-space indentation
 and a trailing newline. Writes use a flushed temporary file followed by atomic
@@ -19,6 +19,11 @@ from the exact raw bytes.
 Schema-v1 M0.1 captures remain readable and are adapted to the richer in-memory
 model. Unsupported schemas, invalid hexadecimal, malformed chunks and
 inconsistent operation/safety fields produce controlled errors.
+
+Schema v3 adds only `driver_id` and `driver_version`. These identify the
+compiled-in interpreter required to validate and decode the evidence. Schema-v1
+and schema-v2 captures load as historical Quansheng captures with driver version
+`1.0`; their stored bytes and reports are not rewritten.
 
 Selected device paths beneath the local home directory are redacted. Captures
 do not collect unrelated device paths, usernames, network data or telemetry.

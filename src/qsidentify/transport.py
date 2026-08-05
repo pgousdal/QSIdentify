@@ -6,8 +6,7 @@ from typing import Protocol, cast
 
 import serial
 
-from .models import Exchange, LineSetting, LineState, ReadChunk
-from .protocol.stream import analyze_stream
+from .models import Exchange, LineSetting, LineState, ReadChunk, StreamAnalysis
 
 DEFAULT_BAUD_RATE = 38400
 DEFAULT_SETTLE_DELAY = 0.10
@@ -66,6 +65,7 @@ class SerialConnection(Protocol):
 
 
 SerialFactory = Callable[..., SerialConnection]
+StreamAnalyzer = Callable[[bytes, bytes], StreamAnalysis]
 
 
 def _default_serial_factory(**kwargs: object) -> SerialConnection:
@@ -115,6 +115,7 @@ def collect_stream(
     serial_factory: SerialFactory = _default_serial_factory,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    stream_analyzer: StreamAnalyzer | None = None,
 ) -> Exchange:
     _validate_settings(
         baud_rate=baud_rate,
@@ -193,12 +194,16 @@ def collect_stream(
             last_received = received_at
 
         response = bytes(raw)
+        if stream_analyzer is None:
+            from .drivers import default_driver
+
+            stream_analyzer = default_driver().analyze_stream
         return Exchange(
             request_payload=request_payload,
             request_frame=request_frame,
             chunks=tuple(chunks),
             raw_response=response,
-            analysis=analyze_stream(response, request_frame),
+            analysis=stream_analyzer(response, request_frame),
             line_state=line_state,
             settle_delay=settle_delay,
             total_timeout=total_timeout,
