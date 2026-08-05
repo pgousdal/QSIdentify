@@ -1,0 +1,47 @@
+{
+  "commands": [
+    {
+      "allowlisted": true,
+      "command_id": "0x0514",
+      "evidence_categories": ["firmware", "protocol"],
+      "expected_response_lengths": [],
+      "minimum_request": "140504006a395764",
+      "notes": ["Existing read-only firmware identification handshake."],
+      "provenance": ["QSIdentify byte fixture", "physical UV-K5(8) validation"],
+      "read_only": true,
+      "request_type": "firmware-identification-request",
+      "response_type": "firmware-identification-response",
+      "safety_class": "identification-read",
+      "symbolic_name": "identify-handshake"
+    },
+    {
+      "allowlisted": false,
+      "command_id": "unavailable:bootloader-identification",
+      "evidence_categories": ["bootloader"],
+      "expected_response_lengths": [],
+      "minimum_request": null,
+      "notes": ["No independently documented safe request is available."],
+      "provenance": ["QSIdentify safety review 1.2"],
+      "read_only": false,
+      "request_type": "unavailable",
+      "response_type": "bootloader-response",
+      "safety_class": "unknown",
+      "symbolic_name": "bootloader-identification-unavailable"
+    },
+    {
+      "allowlisted": false,
+      "command_id": "unavailable:capability-query",
+      "evidence_categories": ["capability"],
+      "expected_response_lengths": [],
+      "minimum_request": null,
+      "notes": ["No independently documented safe request is available."],
+      "provenance": ["QSIdentify safety review 1.2"],
+      "read_only": false,
+      "request_type": "unavailable",
+      "response_type": "unknown",
+      "safety_class": "unknown",
+      "symbolic_name": "protocol-capability-query-unavailable"
+    }
+  ],
+  "schema_version": 1
+}

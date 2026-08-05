@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 - 2026-08-05
+
+- add a packaged inventory that keeps undocumented or unsafe commands unavailable
+- add bounded named evidence probes using only the existing identification command
+- add deterministic stability masks and content-addressed electronic fingerprints
+- add candidate discriminator metadata without automatic hardware mappings
+- add offline evidence reporting, comparison, and sanitized contribution bundles
+- keep MCU, PCB revision, and hardware revision unresolved without verified evidence
+
 ## 1.1.0 - 2026-08-05
 
 - add sanitized hardware regression captures and fixture manifest

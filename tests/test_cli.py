@@ -62,7 +62,7 @@ def test_probe_json_stdout_contains_json_only(monkeypatch) -> None:  # type: ign
     monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: value)
     invocation = CliRunner().invoke(app, ["probe", "test-port", "--json"])
     assert invocation.exit_code == 1
-    assert json.loads(invocation.stdout)["qsidentify_version"] == "1.1.0"
+    assert json.loads(invocation.stdout)["qsidentify_version"] == "1.2.0"
     assert "QSIdentify" not in invocation.stdout
 
 

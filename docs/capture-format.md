@@ -29,6 +29,12 @@ Sanitization migrates v1/v2 evidence to v3, preserves every byte-bearing field,
 normalizes device and timestamp metadata, removes USB/host descriptions, and
 records transformations in optional `capture_metadata`.
 
+M1.2 also permits user-supplied evidence labels in `capture_metadata`:
+`device_alias`, `marketed_model`, `production_sticker`, `boot_screen_text`,
+`menu_range`, `user_observed_revision_marking`, `physical_device_group`, and
+`experiment_id`. They are never electronically confirmed and do not contribute
+to electronic fingerprints.
+
 Selected device paths beneath the local home directory are redacted. Captures
 do not collect unrelated device paths, usernames, network data or telemetry.
 

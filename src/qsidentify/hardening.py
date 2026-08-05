@@ -140,6 +140,8 @@ def release_info() -> dict[str, Any]:
         "firmware_catalog_schema": 1,
         "firmware_catalog_version": catalog.version,
         "hardware_catalog_schema": 1,
+        "fingerprint_schema": 1,
+        "discriminator_catalog_schema": 1,
         "qsidentify_version": __version__,
     }
 
@@ -170,6 +172,12 @@ def audit_results() -> tuple[dict[str, Any], ...]:
         ("capture-host-fields-restricted", True),
         ("firmware-catalog-present", package_data.joinpath("firmware_catalog.json").is_file()),
         ("hardware-catalog-present", package_data.joinpath("hardware_catalog.json").is_file()),
+        ("command-inventory-present", package_data.joinpath("command_inventory.json").is_file()),
+        ("probe-definitions-present", package_data.joinpath("probe_definitions.json").is_file()),
+        (
+            "discriminator-catalog-present",
+            package_data.joinpath("hardware_discriminators.json").is_file(),
+        ),
     )
     return tuple({"check": name, "ok": ok, "offline": True} for name, ok in checks)
 

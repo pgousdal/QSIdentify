@@ -1,0 +1,42 @@
+{
+  "probes": [
+    {
+      "commands": ["0x0514"],
+      "driver_id": "quansheng",
+      "enabled_by_default": true,
+      "evidence_targets": ["firmware", "protocol"],
+      "experimental": false,
+      "id": "firmware-identification",
+      "name": "Firmware identification",
+      "repeat_count": 1,
+      "safety_notes": ["Uses the existing identification-read allowlist entry."],
+      "timing_policy": "standard-bounded"
+    },
+    {
+      "commands": ["0x0514"],
+      "driver_id": "quansheng",
+      "enabled_by_default": false,
+      "evidence_targets": ["stability", "firmware", "protocol"],
+      "experimental": true,
+      "id": "repeated-firmware-identification",
+      "name": "Repeated firmware identification",
+      "repeat_count": 5,
+      "safety_notes": ["Bounded repetition of the existing identification-read command."],
+      "timing_policy": "standard-bounded-with-pause"
+    },
+    {
+      "commands": [],
+      "driver_id": "quansheng",
+      "enabled_by_default": false,
+      "evidence_targets": ["passive-serial"],
+      "experimental": true,
+      "id": "passive-connection-observation",
+      "name": "Passive connection observation",
+      "repeat_count": 1,
+      "safety_notes": ["Transmits no bytes."],
+      "timing_policy": "passive-bounded"
+    }
+  ],
+  "schema_version": 1,
+  "unavailable": ["bootloader-identification", "protocol-capability-query"]
+}

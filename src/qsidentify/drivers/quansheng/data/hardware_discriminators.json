@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "driver": "quansheng",
+      "field": {"encoding": "little-endian", "length": 2, "offset": 12},
+      "id": "quansheng-hello-offset-12-13",
+      "maps_to": [],
+      "notes": ["Observed field has no validated semantic meaning."],
+      "observed_values": ["44e3"],
+      "possible_meaning": "unknown",
+      "provenance": ["sanitized physical UV-K5(8) response derivative"],
+      "source_message": "firmware-identification-response",
+      "status": "candidate"
+    }
+  ],
+  "schema_version": 1
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -15,6 +16,16 @@ from .capture import CaptureError, build_capture, read_capture, write_capture
 from .comparison import compare_captures
 from .doctor import run_checks
 from .drivers import default_driver, drivers, get_driver
+from .evidence import (
+    EvidenceError,
+    compare_evidence,
+    evidence_report,
+    export_bundle,
+    inspect_bundle,
+    load_command_inventory,
+    load_probe_definitions,
+    validate_bundle,
+)
 from .fixtures import validate_fixture_manifest
 from .hardening import (
     ValidationStatus,
@@ -715,6 +726,305 @@ def audit_command(as_json: Annotated[bool, typer.Option("--json")] = False) -> N
             console.print(f"{check['check']}: {'ok' if check['ok'] else 'failed'}")
     if not all(check["ok"] for check in checks):
         raise typer.Exit(1)
+
+
+@app.command("command-list")
+def command_list_command(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
+    commands = load_command_inventory()
+    payload = {
+        "commands": [
+            {
+                "allowlisted": item.allowlisted,
+                "command_id": item.command_id,
+                "evidence_categories": list(item.evidence_categories),
+                "read_only": item.read_only,
+                "safety_class": item.safety_class,
+                "symbolic_name": item.symbolic_name,
+            }
+            for item in commands
+        ]
+    }
+    if as_json:
+        sys.stdout.write(json.dumps(payload, sort_keys=True) + "\n")
+        return
+    table = Table("ID", "Name", "Safety", "Allowlisted")
+    for item in commands:
+        table.add_row(
+            item.command_id, item.symbolic_name, item.safety_class, _yes_no(item.allowlisted)
+        )
+    console.print(table)
+
+
+@app.command("command-info")
+def command_info_command(
+    command_id: str,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    command = next(
+        (
+            item
+            for item in load_command_inventory()
+            if item.command_id == command_id or item.symbolic_name == command_id
+        ),
+        None,
+    )
+    if command is None:
+        error_console.print(f"Unknown command inventory ID: {command_id}")
+        raise typer.Exit(2)
+    payload = {
+        "allowlisted": command.allowlisted,
+        "command_id": command.command_id,
+        "evidence_categories": list(command.evidence_categories),
+        "expected_response_lengths": list(command.expected_response_lengths),
+        "minimum_request": command.minimum_request,
+        "notes": list(command.notes),
+        "provenance": list(command.provenance),
+        "read_only": command.read_only,
+        "request_type": command.request_type,
+        "response_type": command.response_type,
+        "safety_class": command.safety_class,
+        "symbolic_name": command.symbolic_name,
+    }
+    if as_json:
+        sys.stdout.write(json.dumps(payload, sort_keys=True) + "\n")
+    else:
+        for key, value in payload.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+def _read_capture_set(paths: list[Path]) -> tuple[Capture, ...]:
+    if not paths:
+        raise typer.BadParameter("At least one capture is required.")
+    try:
+        return tuple(read_capture(path) for path in paths)
+    except (CaptureError, OSError) as exc:
+        error_console.print(f"Evidence input failed: {exc}")
+        raise typer.Exit(3) from None
+
+
+@app.command("evidence-report")
+def evidence_report_command(
+    paths: list[Path],
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        report = evidence_report(_read_capture_set(paths))
+    except EvidenceError as exc:
+        error_console.print(f"Evidence analysis failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(json.dumps(report, sort_keys=True) + "\n")
+        return
+    fingerprint = report["fingerprint"]
+    observed = report["observed"]
+    console.print("[bold]Electronic evidence[/bold]")
+    console.print(f"  Firmware:          {', '.join(observed['firmware_strings']) or 'unresolved'}")
+    console.print(f"  Stable bytes:      {len(observed['stable_positions'])}")
+    console.print(f"  Variable bytes:    {len(observed['variable_positions'])}")
+    console.print(f"  Fingerprint:       {fingerprint['fingerprint_id']}")
+    console.print("[bold]Unresolved[/bold]")
+    console.print(f"  {', '.join(report['unresolved'])}")
+
+
+@app.command("evidence-compare")
+def evidence_compare_command(
+    paths: list[Path],
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        comparison = compare_evidence(_read_capture_set(paths))
+    except EvidenceError as exc:
+        error_console.print(f"Evidence comparison failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(json.dumps(comparison, sort_keys=True) + "\n")
+        return
+    for key, value in comparison.items():
+        console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("evidence-export")
+def evidence_export_command(
+    paths: list[Path],
+    output: Annotated[Path, typer.Option("--output", "-o")],
+    provenance_notes: Annotated[str, typer.Option("--provenance-notes")] = "",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        bundle = export_bundle(tuple(paths), output, provenance_notes)
+    except (CaptureError, EvidenceError, OSError) as exc:
+        error_console.print(f"Evidence export failed: {exc}")
+        raise typer.Exit(3) from None
+    result = {"capture_count": len(bundle["captures"]), "output": output.name, "status": "valid"}
+    if as_json:
+        sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
+    else:
+        console.print(
+            f"Evidence bundle written: {output.name} ({result['capture_count']} captures)"
+        )
+
+
+@app.command("evidence-bundle-inspect")
+def evidence_bundle_inspect_command(
+    bundle: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        result = inspect_bundle(bundle)
+    except (EvidenceError, OSError, json.JSONDecodeError) as exc:
+        error_console.print(f"Bundle inspection failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
+    else:
+        for key, value in result.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("evidence-bundle-validate")
+def evidence_bundle_validate_command(
+    bundle: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ok, errors = validate_bundle(bundle)
+    result = {"errors": list(errors), "status": "valid" if ok else "invalid"}
+    if as_json:
+        sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
+    else:
+        console.print(result["status"])
+        for error in errors:
+            error_console.print(error)
+    if not ok:
+        raise typer.Exit(3)
+
+
+@app.command("evidence-probe")
+def evidence_probe_command(
+    device: str,
+    probe_id: Annotated[str, typer.Option("--probe")] = "firmware-identification",
+    repeat: Annotated[int | None, typer.Option("--repeat", min=1, max=20)] = None,
+    timeout: Annotated[float, typer.Option("--timeout", min=0.01)] = 3.0,
+    capture_directory: Annotated[Path | None, typer.Option("--capture-directory")] = None,
+    trace: Annotated[bool, typer.Option("--trace")] = False,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+    device_alias: Annotated[str | None, typer.Option("--device-alias")] = None,
+    marketed_model: Annotated[str | None, typer.Option("--marketed-model")] = None,
+    production_sticker: Annotated[str | None, typer.Option("--production-sticker")] = None,
+    boot_screen_text: Annotated[str | None, typer.Option("--boot-screen-text")] = None,
+    menu_range: Annotated[str | None, typer.Option("--menu-range")] = None,
+    revision_marking: Annotated[str | None, typer.Option("--revision-marking")] = None,
+    physical_device_group: Annotated[str | None, typer.Option("--physical-device-group")] = None,
+    experiment_id: Annotated[str | None, typer.Option("--experiment-id")] = None,
+) -> None:
+    definitions = {item.id: item for item in load_probe_definitions()}
+    definition = definitions.get(probe_id)
+    if definition is None or not definition.available:
+        error_console.print(f"Unavailable or unknown evidence probe: {probe_id}")
+        raise typer.Exit(2)
+    count = repeat if repeat is not None else definition.repeat_count
+    plan = {
+        "commands": list(definition.commands),
+        "driver_id": definition.driver_id,
+        "evidence_targets": list(definition.evidence_targets),
+        "experimental": definition.experimental,
+        "probe_id": definition.id,
+        "repeat_count": count,
+        "safety": "passive" if not definition.commands else "identification-read",
+    }
+    captures: list[Capture] = []
+    labels = {
+        key: value
+        for key, value in {
+            "boot_screen_text": boot_screen_text,
+            "device_alias": device_alias,
+            "experiment_id": experiment_id,
+            "marketed_model": marketed_model,
+            "menu_range": menu_range,
+            "physical_device_group": physical_device_group,
+            "production_sticker": production_sticker,
+            "user_observed_revision_marking": revision_marking,
+        }.items()
+        if value is not None
+    }
+    try:
+        port = find_port(device)
+        for index in range(count):
+            result = (
+                monitor_port(port, duration=timeout)
+                if not definition.commands
+                else probe_port(port, timeout=timeout)
+            )
+            capture = build_capture(result)
+            if labels:
+                capture = replace(capture, capture_metadata=labels)
+            captures.append(capture)
+            if capture_directory is not None:
+                write_capture(capture_directory / f"{definition.id}-{index + 1:02}.json", capture)
+            if trace and not as_json:
+                _print_result(result, trace=True)
+    except (RuntimeError, TransportError, OSError) as exc:
+        error_console.print(f"Evidence probe failed: {exc}")
+        raise typer.Exit(2) from None
+    output = {"plan": plan, "report": evidence_report(tuple(captures))}
+    if as_json:
+        sys.stdout.write(json.dumps(output, sort_keys=True) + "\n")
+    elif not trace:
+        console.print(f"Probe: {definition.name}; captures: {len(captures)}")
+
+
+@app.command("identify")
+def identify_command(
+    device: str,
+    model: Annotated[str | None, typer.Option("--model")] = None,
+    timeout: Annotated[float, typer.Option("--timeout", min=0.01)] = 3.0,
+    repeat: Annotated[int, typer.Option("--repeat", min=1, max=20)] = 1,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Collect identity evidence using only the allowlisted identification read."""
+    captures: list[Capture] = []
+    try:
+        port = find_port(device)
+        for _ in range(repeat):
+            capture = build_capture(probe_port(port, timeout=timeout))
+            if model is not None:
+                capture = replace(capture, capture_metadata={"marketed_model": model})
+            captures.append(capture)
+    except (RuntimeError, TransportError, OSError) as exc:
+        error_console.print(f"Identification failed: {exc}")
+        raise typer.Exit(2) from None
+    report = evidence_report(tuple(captures))
+    if as_json:
+        sys.stdout.write(json.dumps(report, sort_keys=True) + "\n")
+        return
+    observed = report["observed"]
+    labels = report["user_supplied_labels"]
+    confidence = report["confidence"]
+    console.print("[bold]Electronic identity[/bold]")
+    console.print("  Manufacturer:       Quansheng")
+    console.print("  Protocol family:    UV-K5 protocol")
+    console.print(
+        f"  Firmware:           {', '.join(observed['firmware_strings']) or 'unresolved'}"
+    )
+    model_text = labels.get("marketed_model", "unresolved")
+    if "marketed_model" in labels:
+        model_text += " (user supplied)"
+    console.print(f"  Marketed model:     {model_text}")
+    console.print("  Hardware revision:  unresolved")
+    console.print("  MCU:                unresolved")
+    console.print("  PCB revision:       unresolved")
+    console.print("  Bootloader:         unresolved")
+    console.print("[bold]Evidence[/bold]")
+    console.print(f"  Protocol:           {confidence['protocol']}")
+    console.print(f"  Firmware:           {confidence['firmware']}")
+    stability_text = (
+        f"confirmed across {repeat} probes" if repeat > 1 else "not assessed (one probe)"
+    )
+    console.print(f"  Stable response:    {stability_text}")
+    console.print("  MCU discriminator:  unavailable")
+    console.print("[bold]Fingerprint[/bold]")
+    console.print(f"  ID:                 {report['fingerprint']['fingerprint_id']}")
+    console.print("[bold]Next required evidence[/bold]")
+    console.print("  A verified electronic discriminator for hardware revision or MCU.")
 
 
 @app.command("fixture-validate")

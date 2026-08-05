@@ -44,6 +44,10 @@ M0.2 stream analysis lives in `protocol/stream.py`. Read-chunk boundaries are
 transport evidence only. Exact transmit echoes must be excluded from radio
 responses, and variable unframed bytes must remain unidentified evidence.
 
+M1.2 electronic evidence analysis lives in `evidence.py`. Candidate
+discriminators are experimental and only `verified-discriminator` records may
+contribute to an automatic hardware identity.
+
 M0.3 advisory analysis is offline only. Firmware strings and marketed model
 names never establish a hardware revision or MCU. User declarations and local
 catalog inferences must remain visibly distinct from electronically observed
