@@ -2,11 +2,12 @@
 
 **Read-only identification and diagnostics for Quansheng radios.**
 
-QSIdentify 0.1.1 sends one allowlisted, read-only identification query and
-records exactly what the radio returns. It reports protocol evidence without
-claiming that a firmware string proves a hardware revision.
+QSIdentify 0.2.0 sends one allowlisted, read-only identification query and
+records the complete bounded serial stream. It separates adapter echo, framed
+responses, null bytes, incomplete candidates and unknown binary evidence
+without claiming that a firmware string proves a hardware revision.
 
-## M0.1 status
+## M0.2 status
 
 M0 incorrectly sent the logical identification payload as if it were a complete
 serial command, read the response in one generic operation, and searched framed
@@ -14,9 +15,10 @@ and obfuscated bytes for text. M0.1 adds the Quansheng frame codec, bounded
 frame-aware transport, payload-only response classification, schema-validated
 captures, and stable CLI errors.
 
-The codec is protocol-correct against implemented byte fixtures and published
-reverse-engineering evidence. No physical-radio capture is included, so real
-radios may reveal additional protocol variants.
+M0.2 follows physical UV-K5(8) observations where CH340 cables sometimes echoed
+the exact transmit frame or returned variable null/unframed bytes. These are
+transport observations, not evidence of a new Quansheng protocol. The codec
+remains fixture-validated; real radios may expose additional variants.
 
 ## Installation
 
@@ -30,19 +32,23 @@ python -m pip install -e '.[dev]'
 
 ```bash
 qsidentify ports
+qsidentify --version
 qsidentify probe /dev/ttyUSB0
 qsidentify probe --auto
 qsidentify probe /dev/ttyUSB0 --trace
 qsidentify probe /dev/ttyUSB0 --json
 qsidentify probe /dev/ttyUSB0 --capture capture.json
+qsidentify monitor /dev/ttyUSB0 --duration 5 --dtr off --rts off --trace
+qsidentify matrix /dev/ttyUSB0 --capture-dir captures/matrix
 qsidentify decode capture.json
+qsidentify compare capture1.json capture2.json
 qsidentify doctor
 ```
 
 Example summary:
 
 ```text
-QSIdentify 0.1.1
+QSIdentify 0.2.0
 
 Transport
   Port:              /dev/ttyUSB0
@@ -62,8 +68,9 @@ Radio
 ```
 
 Use `--trace` to display logical and encoded transmit bytes, raw receive bytes,
-decoded payload, and received/calculated checksums. Use `--capture unknown.json`
-to preserve an unknown response for offline `qsidentify decode unknown.json`.
+each timestamped serial read, combined RX bytes, echoes, candidates, decoded
+payload and checksums. `monitor` never transmits. `matrix` runs at most twelve
+read-only probes across explicit DTR/RTS and settle-delay combinations.
 
 ## Safety boundary
 
@@ -95,7 +102,8 @@ git diff --check
 
 All tests use generated fixtures and fake serial connections; no radio is
 required. See `docs/protocol.md`, `docs/protocol-safety.md`, and
-`docs/capture-format.md`.
+`docs/capture-format.md`. Transport evidence and physical observations are in
+`docs/transport-diagnostics.md`.
 
 ## License
 

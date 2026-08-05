@@ -36,6 +36,10 @@ M0.1 framing lives in `protocol/frame.py`. Logical commands must be encoded by
 the codec before transport; decoders must inspect decoded payloads, never raw
 protected frame bytes.
 
+M0.2 stream analysis lives in `protocol/stream.py`. Read-chunk boundaries are
+transport evidence only. Exact transmit echoes must be excluded from radio
+responses, and variable unframed bytes must remain unidentified evidence.
+
 ## Coding requirements
 
 - Python 3.11+

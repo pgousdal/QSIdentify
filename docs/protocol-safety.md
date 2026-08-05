@@ -3,7 +3,7 @@
 QSIdentify is not a radio programmer.
 
 Every outbound logical command is declared in `protocol/commands.py` with an
-explicit safety class. The only M0.1 command is the read-only identification
+explicit safety class. The only M0.2 command is the read-only identification
 query. The probe checks the classification before encoding or transmitting it.
 The CLI has no input that becomes transmit bytes.
 
@@ -17,6 +17,11 @@ reproducible evidence, it is demonstrably read-only, and byte-level, malformed,
 capture, and allowlist safety tests cover it. Commands that alter persistent
 state or operating mode are outside this project's scope.
 
-Transport uses explicit timeouts, a strict frame-size ceiling, a complete write
-and flush, stale-input reset, and bounded frame reads. Tests inject fake serial
-connections and never require hardware.
+Transport uses explicit idle and total timeouts, a strict stream-size ceiling,
+a complete write and flush, stale input/output reset, and bounded repeated
+reads. Tests inject fake serial connections and never require hardware.
+
+`monitor` is passive and performs zero writes. `matrix` is bounded to four line
+states across at most three settle delays and always uses the same allowlisted
+identification command. DTR and RTS are applied once per attempt; no state is
+claimed to be universally correct.

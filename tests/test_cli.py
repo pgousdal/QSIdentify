@@ -4,65 +4,82 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from qsidentify import __version__
+from qsidentify.capture import build_capture, write_capture
 from qsidentify.cli import app
 from qsidentify.models import (
     Confidence,
     DecodedResponse,
     Exchange,
+    LineState,
     MessageType,
     PortInfo,
     ProbeReport,
     ProbeResult,
+    ReadChunk,
 )
+from qsidentify.protocol.stream import analyze_stream
 
 
-def probe_result(message_type: MessageType) -> ProbeResult:
+def result(operation: str = "probe") -> ProbeResult:
+    raw = b"" if operation == "probe" else b"spontaneous"
+    analysis = analyze_stream(raw)
     port = PortInfo("test-port")
     decoded = DecodedResponse(
-        reported_version="V1.0" if message_type is MessageType.FIRMWARE_IDENTIFICATION else None,
-        reported_bootloader_version=None,
-        detected_protocol="Quansheng framed identification response",
-        message_type=message_type,
-        inferred_family=None,
-        confidence=Confidence.LOW,
-        evidence=(),
-        warnings=(),
+        None, None, None, MessageType.NO_RESPONSE, None, Confidence.NONE, (), ()
     )
     report = ProbeReport(
-        schema_version=1,
-        qsidentify_version=__version__,
-        port=port,
-        baud_rate=38400,
-        timeout=1.0,
-        operating_mode="unknown",
-        response_received=message_type is not MessageType.NO_RESPONSE,
-        frame_detected=False,
-        frame_complete=False,
-        message_type=message_type,
-        reported_version=decoded.reported_version,
-        detected_protocol=decoded.detected_protocol,
-        confidence=decoded.confidence,
+        2,
+        __version__,
+        port,
+        38400,
+        3.0,
+        "unknown",
+        bool(raw),
+        False,
+        False,
+        MessageType.NO_RESPONSE,
+        settle_delay=0.0,
+        transport_classification=analysis.classification,
     )
-    return ProbeResult(report, Exchange(b"request", b"frame", b"", b""), decoded)
+    exchange = Exchange(
+        b"request" if operation == "probe" else b"",
+        b"frame" if operation == "probe" else b"",
+        (ReadChunk(1, 1.0, raw),) if raw else (),
+        raw,
+        analysis,
+        LineState(None, None),
+        0.0,
+        3.0,
+        0.2,
+        operation=operation,
+    )
+    return ProbeResult(report, exchange, decoded)
 
 
 def test_probe_json_stdout_contains_json_only(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    result = probe_result(MessageType.FIRMWARE_IDENTIFICATION)
-    monkeypatch.setattr("qsidentify.cli.find_port", lambda _device: result.report.port)
-    monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: result)
+    value = result()
+    monkeypatch.setattr("qsidentify.cli.find_port", lambda _device: value.report.port)
+    monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: value)
     invocation = CliRunner().invoke(app, ["probe", "test-port", "--json"])
-    assert invocation.exit_code == 0
-    assert json.loads(invocation.stdout)["reported_version"] == "V1.0"
+    assert invocation.exit_code == 1
+    assert json.loads(invocation.stdout)["qsidentify_version"] == "0.2.0"
     assert "QSIdentify" not in invocation.stdout
 
 
-def test_no_response_has_stable_warning_exit(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    result = probe_result(MessageType.NO_RESPONSE)
-    monkeypatch.setattr("qsidentify.cli.find_port", lambda _device: result.report.port)
-    monkeypatch.setattr("qsidentify.cli.probe_port", lambda *_args, **_kwargs: result)
-    invocation = CliRunner().invoke(app, ["probe", "test-port", "--json"])
+def test_version_uses_canonical_package_version() -> None:
+    invocation = CliRunner().invoke(app, ["--version"])
+    assert invocation.exit_code == 0
+    assert invocation.stdout == f"QSIdentify {__version__}\n"
+
+
+def test_monitor_json_stdout_contains_json_only(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    value = result("monitor")
+    monkeypatch.setattr("qsidentify.cli.find_port", lambda _device: value.report.port)
+    monkeypatch.setattr("qsidentify.cli.monitor_port", lambda *_args, **_kwargs: value)
+    invocation = CliRunner().invoke(app, ["monitor", "test-port", "--json"])
     assert invocation.exit_code == 1
-    assert json.loads(invocation.stdout)["message_type"] == "no-response"
+    assert json.loads(invocation.stdout)["transport_classification"] == "unframed-binary-response"
+    assert "QSIdentify" not in invocation.stdout
 
 
 def test_invalid_capture_has_stable_input_exit(tmp_path: Path) -> None:
@@ -72,3 +89,19 @@ def test_invalid_capture_has_stable_input_exit(tmp_path: Path) -> None:
     assert invocation.exit_code == 3
     assert "Invalid capture:" in invocation.output
     assert "Traceback" not in invocation.output
+
+
+def test_invalid_line_setting_and_timing_are_controlled() -> None:
+    runner = CliRunner()
+    assert runner.invoke(app, ["probe", "test", "--dtr", "maybe"]).exit_code == 2
+    assert runner.invoke(app, ["monitor", "test", "--duration", "0"]).exit_code == 2
+
+
+def test_compare_output(tmp_path: Path) -> None:
+    paths = [tmp_path / "one.json", tmp_path / "two.json"]
+    for path in paths:
+        write_capture(path, build_capture(result("monitor")))
+    invocation = CliRunner().invoke(app, ["compare", *(str(path) for path in paths)])
+    assert invocation.exit_code == 0
+    assert "Exact match:" in invocation.stdout
+    assert "SHA-256" in invocation.stdout

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -11,11 +12,11 @@ from rich.table import Table
 
 from . import __version__
 from .capture import CaptureError, build_capture, read_capture, write_capture
+from .comparison import compare_captures
 from .doctor import run_checks
-from .models import DecodedResponse, MessageType, ProbeResult
+from .models import DecodedResponse, LineSetting, MessageType, ProbeResult
 from .ports import choose_auto_port, find_port, list_serial_ports
-from .probe import probe_port
-from .protocol.decoder import decode_response
+from .probe import monitor_port, probe_port
 from .transport import TransportError
 
 app = typer.Typer(
@@ -24,6 +25,22 @@ app = typer.Typer(
 )
 console = Console()
 error_console = Console(stderr=True)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"QSIdentify {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool | None,
+        typer.Option("--version", callback=_version_callback, is_eager=True),
+    ] = None,
+) -> None:
+    """Read-only identification and transport diagnostics."""
 
 
 def _yes_no(value: bool) -> str:
@@ -56,6 +73,11 @@ def _print_result(result: ProbeResult, *, trace: bool) -> None:
     console.print(f"  Baud rate:         {report.baud_rate}")
     console.print(f"  Request bytes:     {len(result.exchange.transmitted_frame)}")
     console.print(f"  Response bytes:    {len(result.exchange.response)}")
+    console.print(f"  Classification:    {report.transport_classification.value}")
+    console.print(
+        f"  DTR / RTS:         {result.exchange.line_state.dtr} / "
+        f"{result.exchange.line_state.rts}"
+    )
     console.print("\n[bold]Protocol[/bold]")
     console.print(f"  Frame detected:    {_yes_no(report.frame_detected)}")
     console.print(f"  Frame complete:    {_yes_no(report.frame_complete)}")
@@ -72,7 +94,18 @@ def _print_result(result: ProbeResult, *, trace: bool) -> None:
         console.print("\n[bold]Trace[/bold]")
         console.print(f"  Logical TX payload:   {result.exchange.logical_request.hex(' ')}")
         console.print(f"  Encoded TX frame:     {result.exchange.transmitted_frame.hex(' ')}")
-        console.print(f"  Raw RX bytes:         {result.exchange.response.hex(' ') or '-'}")
+        console.print("  Serial reads")
+        for chunk in result.exchange.chunks:
+            console.print(
+                f"    #{chunk.sequence:<3} +{chunk.monotonic_offset_ms:.3f} ms  "
+                f"{len(chunk.data):>4} bytes  {chunk.data.hex(' ')}"
+            )
+        analysis = result.exchange.analysis
+        console.print(f"  Combined raw RX:      {result.exchange.response.hex(' ') or '-'}")
+        console.print(f"  Leading bytes:        {analysis.leading_bytes.hex(' ') or '-'}")
+        console.print(f"  Detected TX echoes:   {len(analysis.echo_frames)}")
+        console.print(f"  Candidate frames:     {len(analysis.candidates)}")
+        console.print(f"  Unparsed bytes:       {analysis.unparsed_bytes.hex(' ') or '-'}")
         console.print(f"  Decoded RX payload:   {frame.payload.hex(' ') if frame else '-'}")
         received = (
             f"{frame.checksum_received:04x}"
@@ -93,7 +126,11 @@ def probe_command(
     device: Annotated[str | None, typer.Argument()] = None,
     auto: Annotated[bool, typer.Option("--auto")] = False,
     baud_rate: Annotated[int, typer.Option("--baud", min=1)] = 38400,
-    timeout: Annotated[float, typer.Option("--timeout", min=0.01)] = 1.0,
+    timeout: Annotated[float, typer.Option("--timeout", min=0.01)] = 3.0,
+    idle_timeout: Annotated[float, typer.Option("--idle-timeout", min=0.001)] = 0.2,
+    settle_delay: Annotated[float, typer.Option("--settle-delay", min=0.0)] = 0.1,
+    dtr: Annotated[LineSetting, typer.Option("--dtr")] = LineSetting.AUTO,
+    rts: Annotated[LineSetting, typer.Option("--rts")] = LineSetting.AUTO,
     trace: Annotated[bool, typer.Option("--trace")] = False,
     as_json: Annotated[bool, typer.Option("--json")] = False,
     capture_path: Annotated[Path | None, typer.Option("--capture")] = None,
@@ -104,7 +141,15 @@ def probe_command(
         raise typer.BadParameter("Specify a serial device or use --auto.")
     try:
         port = choose_auto_port() if auto else find_port(device or "")
-        result = probe_port(port, baud_rate=baud_rate, timeout=timeout)
+        result = probe_port(
+            port,
+            baud_rate=baud_rate,
+            timeout=timeout,
+            idle_timeout=idle_timeout,
+            settle_delay=settle_delay,
+            dtr=dtr,
+            rts=rts,
+        )
         if capture_path is not None:
             write_capture(capture_path, build_capture(result))
     except (RuntimeError, TransportError, OSError) as exc:
@@ -126,8 +171,93 @@ def probe_command(
     if result.report.message_type in {
         MessageType.VALID_UNKNOWN_FRAME,
         MessageType.UNKNOWN_SERIAL_RESPONSE,
+        MessageType.TRANSMIT_ECHO,
+        MessageType.ECHO_ONLY,
+        MessageType.PARTIAL_TRANSMIT_ECHO,
+        MessageType.NULL_BYTE_RESPONSE,
+        MessageType.UNFRAMED_BINARY_RESPONSE,
     }:
         raise typer.Exit(1)
+
+
+@app.command("monitor")
+def monitor_command(
+    device: str,
+    duration: Annotated[float, typer.Option("--duration", min=0.01)] = 5.0,
+    idle_timeout: Annotated[float, typer.Option("--idle-timeout", min=0.001)] = 1.0,
+    baud_rate: Annotated[int, typer.Option("--baud", min=1)] = 38400,
+    dtr: Annotated[LineSetting, typer.Option("--dtr")] = LineSetting.AUTO,
+    rts: Annotated[LineSetting, typer.Option("--rts")] = LineSetting.AUTO,
+    trace: Annotated[bool, typer.Option("--trace")] = False,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+    capture_path: Annotated[Path | None, typer.Option("--capture")] = None,
+) -> None:
+    try:
+        result = monitor_port(
+            find_port(device),
+            baud_rate=baud_rate,
+            duration=duration,
+            idle_timeout=idle_timeout,
+            dtr=dtr,
+            rts=rts,
+        )
+        if capture_path is not None:
+            write_capture(capture_path, build_capture(result))
+    except (RuntimeError, TransportError, OSError, ValueError) as exc:
+        error_console.print(f"Monitor failed: {exc}")
+        raise typer.Exit(2) from None
+    if as_json:
+        sys.stdout.write(json.dumps(result.report.to_dict(), sort_keys=True) + "\n")
+    else:
+        _print_result(result, trace=trace)
+    if result.report.message_type is MessageType.NO_RESPONSE:
+        raise typer.Exit(1)
+
+
+@app.command("matrix")
+def matrix_command(
+    device: str,
+    settle_delays: Annotated[list[float] | None, typer.Option("--settle-delay")] = None,
+    timeout: Annotated[float, typer.Option("--timeout", min=0.01)] = 3.0,
+    idle_timeout: Annotated[float, typer.Option("--idle-timeout", min=0.001)] = 0.2,
+    pause: Annotated[float, typer.Option("--pause", min=0.0)] = 0.25,
+    capture_dir: Annotated[Path | None, typer.Option("--capture-dir")] = None,
+) -> None:
+    delays = settle_delays or [0.1]
+    if len(delays) > 3 or any(value < 0 for value in delays):
+        raise typer.BadParameter("Use at most three non-negative settle delays.")
+    states = (
+        (LineSetting.OFF, LineSetting.OFF),
+        (LineSetting.ON, LineSetting.OFF),
+        (LineSetting.OFF, LineSetting.ON),
+        (LineSetting.ON, LineSetting.ON),
+    )
+    port = find_port(device)
+    attempt = 0
+    for delay in delays:
+        for dtr, rts in states:
+            attempt += 1
+            try:
+                result = probe_port(
+                    port,
+                    timeout=timeout,
+                    idle_timeout=idle_timeout,
+                    settle_delay=delay,
+                    dtr=dtr,
+                    rts=rts,
+                )
+            except (RuntimeError, TransportError, OSError, ValueError) as exc:
+                error_console.print(f"Matrix attempt {attempt} failed: {exc}")
+                raise typer.Exit(2) from None
+            console.print(
+                f"#{attempt}: DTR {dtr.value}, RTS {rts.value}, settle {delay:g}s: "
+                f"{result.report.transport_classification.value}"
+            )
+            if capture_dir is not None:
+                name = f"attempt-{attempt:02d}-dtr-{dtr.value}-rts-{rts.value}.json"
+                write_capture(capture_dir / name, build_capture(result))
+            if pause:
+                time.sleep(pause)
 
 
 def _print_decoded(decoded: DecodedResponse) -> None:
@@ -143,11 +273,6 @@ def _print_decoded(decoded: DecodedResponse) -> None:
 def decode_command(path: Path) -> None:
     try:
         capture = read_capture(path)
-        framed = bytes.fromhex(capture.received_frame_hex)
-        leading = bytes.fromhex(capture.leading_response_bytes_hex)
-        decoded = decode_response(
-            framed or leading, incomplete=not capture.report.frame_complete
-        )
     except CaptureError as exc:
         error_console.print(f"Invalid capture: {exc}")
         raise typer.Exit(3) from None
@@ -155,19 +280,73 @@ def decode_command(path: Path) -> None:
     console.print(f"Capture:           {path}")
     console.print(f"Created:           {capture.created_utc}")
     console.print(f"Port:              {capture.port.device}")
-    _print_decoded(decoded)
-    console.print(f"Response bytes:    {len(bytes.fromhex(capture.received_frame_hex))}")
+    _print_decoded(
+        DecodedResponse(
+            capture.report.reported_version,
+            capture.report.reported_bootloader_version,
+            capture.report.detected_protocol,
+            capture.report.message_type,
+            capture.report.inferred_family,
+            capture.report.confidence,
+            capture.report.evidence,
+            capture.report.warnings,
+        )
+    )
+    console.print(f"Response bytes:    {len(bytes.fromhex(capture.raw_response_hex))}")
+
+
+@app.command("compare")
+def compare_command(paths: Annotated[list[Path], typer.Argument()]) -> None:
+    try:
+        captures = tuple(read_capture(path) for path in paths)
+        comparison = compare_captures(captures)
+    except (CaptureError, ValueError) as exc:
+        error_console.print(f"Compare failed: {exc}")
+        raise typer.Exit(3) from None
+    table = Table(title="Capture comparison")
+    for column in (
+        "Capture",
+        "Bytes",
+        "Classification",
+        "Framed",
+        "Echo",
+        "Null %",
+        "SHA-256",
+    ):
+        table.add_column(column)
+    for path, summary in zip(paths, comparison.summaries, strict=True):
+        table.add_row(
+            str(path),
+            str(summary.response_length),
+            summary.classification,
+            _yes_no(summary.framed),
+            _yes_no(summary.echo_present),
+            f"{summary.null_percentage:.1f}",
+            summary.sha256,
+        )
+    console.print(table)
+    console.print(f"Exact match:       {_yes_no(comparison.exact_match)}")
+    console.print(f"Common prefix:     {comparison.common_prefix.hex(' ') or '-'}")
+    console.print(f"Common suffix:     {comparison.common_suffix.hex(' ') or '-'}")
+    console.print(f"Common positions:  {len(comparison.common_positions)}")
+    frequency = " ".join(f"{value:02x}:{count}" for value, count in comparison.byte_frequency)
+    console.print(f"Byte frequency:    {frequency or '-'}")
 
 
 @app.command("doctor")
 def doctor_command() -> None:
     failed = False
     table = Table(title="QSIdentify doctor")
-    for column in ("Check", "Status", "Detail"):
+    for column in ("Check", "Status", "Mode", "Detail"):
         table.add_column(column)
     for check in run_checks():
         failed = failed or not check.ok
-        table.add_row(check.name, "OK" if check.ok else "WARN", check.detail)
+        table.add_row(
+            check.name,
+            "OK" if check.ok else "WARN",
+            "offline" if check.offline else "live",
+            check.detail,
+        )
     console.print(table)
     if failed:
         raise typer.Exit(1)

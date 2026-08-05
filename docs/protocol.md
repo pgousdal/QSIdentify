@@ -42,3 +42,8 @@ printable version evidence is present.
 
 These rules are validated against deterministic fixtures and available
 reverse-engineering evidence, not an in-repository physical-radio capture.
+
+M0.2 applies framing to the complete collected byte stream. It scans every
+`ab cd` candidate, records malformed and truncated candidates, filters exact
+copies of the transmitted frame as adapter echoes, and continues looking for a
+non-echo response. Chunk boundaries never affect frame decoding.

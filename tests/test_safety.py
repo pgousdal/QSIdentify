@@ -18,14 +18,26 @@ def test_no_write_like_command_names() -> None:
 
 
 def test_cli_has_no_arbitrary_transmit_option() -> None:
-    result = CliRunner().invoke(app, ["probe", "--help"])
-    assert result.exit_code == 0
-    lowered = result.stdout.lower()
-    assert "--hex" not in lowered
-    assert "--frame" not in lowered
-    assert "--transmit" not in lowered
+    runner = CliRunner()
+    for command in ("probe", "monitor", "matrix"):
+        result = runner.invoke(app, [command, "--help"])
+        assert result.exit_code == 0
+        lowered = result.stdout.lower()
+        assert "--hex" not in lowered
+        assert "--frame" not in lowered
+        assert "--transmit" not in lowered
 
 
 def test_no_write_capable_modules_exist() -> None:
     names = {path.name.lower() for path in Path("src/qsidentify").rglob("*.py")}
     assert not names & {"eeprom.py", "flash.py", "firmware.py", "writer.py"}
+
+
+def test_matrix_implementation_delegates_to_safe_probe() -> None:
+    source = Path("src/qsidentify/cli.py").read_text()
+    start = source.index("def matrix_command(")
+    end = source.index('@app.command("decode")')
+    matrix_source = source[start:end]
+    assert "probe_port(" in matrix_source
+    assert ".write(" not in matrix_source
+    assert "encode_frame" not in matrix_source

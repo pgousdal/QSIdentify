@@ -1,32 +1,24 @@
-# Capture format v1
+# Capture format v2
 
-Capture files are UTF-8 JSON with sorted keys, two-space indentation, and a
-trailing newline. Writes use a temporary file in the destination directory,
-flush it, and atomically replace the destination.
+Schema v2 is deterministic UTF-8 JSON with sorted keys, two-space indentation
+and a trailing newline. Writes use a flushed temporary file followed by atomic
+replacement.
 
-Required top-level fields are:
+It records the operation, selected-port metadata, baud rate, requested and
+resulting DTR/RTS state, settle/total/idle timing, optional logical request and
+encoded frame, timestamped read chunks, combined raw RX, leading bytes, exact
+echo frames, all frame candidates, decoded valid frames, unparsed/trailing
+bytes, stream classification, report and safety metadata.
 
-- `schema_version` (exactly `1`)
-- `created_utc` and `qsidentify_version`
-- `port`, `baud_rate`, and `timeout`
-- `logical_request_payload_hex`
-- `encoded_transmitted_frame_hex`
-- `leading_response_bytes_hex`
-- `received_frame_hex`
-- `decoded_payload_hex`
-- `checksum_status`
-- `probe_report`
-- `safety`
+Probe captures declare `operation: probe`, `transmit_performed: true`, the
+`identify-handshake` command and `read-only` safety. Monitor captures declare
+`operation: monitor`, `transmit_performed: false`, and contain no request bytes.
+Loading enforces these relationships and recomputes derived stream analysis
+from the exact raw bytes.
 
-Hex fields use canonical lowercase hexadecimal without separators. Leading
-garbage, complete framed bytes, decoded payload bytes, and unknown data are kept
-separately so transport and protocol evidence are not conflated.
+Schema-v1 M0.1 captures remain readable and are adapted to the richer in-memory
+model. Unsupported schemas, invalid hexadecimal, malformed chunks and
+inconsistent operation/safety fields produce controlled errors.
 
-Loading validates required fields, types, enums, canonical hex, and the schema
-version. Malformed JSON and unsupported future versions produce controlled CLI
-errors. `qsidentify decode FILE` decodes the stored received frame without
-opening a serial port.
-
-Captures include only selected-port metadata. A selected device path underneath
-the local home directory is stored as `<redacted-home-path>`. Captures do not
-collect usernames, unrelated device paths, network information, or telemetry.
+Selected device paths beneath the local home directory are redacted. Captures
+do not collect unrelated device paths, usernames, network data or telemetry.
