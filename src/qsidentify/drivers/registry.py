@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from qsidentify.drivers.base import Driver
+from qsidentify.drivers.base import DRIVER_API_VERSION, Driver
 
 
 class DriverRegistry:
@@ -11,6 +11,11 @@ class DriverRegistry:
             self.register(driver)
 
     def register(self, driver: Driver) -> None:
+        if driver.info.api_version != DRIVER_API_VERSION:
+            raise ValueError(
+                f"Driver '{driver.info.id}' implements API {driver.info.api_version}; "
+                f"required API is {DRIVER_API_VERSION}."
+            )
         if driver.info.id in self._drivers:
             raise ValueError(f"Driver '{driver.info.id}' is already registered.")
         self._drivers[driver.info.id] = driver

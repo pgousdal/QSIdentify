@@ -24,3 +24,9 @@ arbitrary frame transmission.
 `DriverInfo` and `IdentificationResult` are public immutable models. Modules
 under `qsidentify.transport` and driver implementation packages remain internal
 architecture and are not required for normal identification.
+
+The API is synchronous. Callers coordinate concurrent access to one device.
+`identify()` may raise `KeyError` for an unknown driver, `RuntimeError` or its
+transport subclasses, `OSError`, or `ValueError`. Documented parameters and the
+immutable `IdentificationResult(driver, report)` fields follow semantic
+versioning.

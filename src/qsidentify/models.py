@@ -275,6 +275,7 @@ class Capture:
     safety: dict[str, str]
     driver_id: str = "quansheng"
     driver_version: str = "1.0"
+    capture_metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return capture_to_dict(self)
@@ -398,4 +399,5 @@ def capture_to_dict(capture: Capture) -> dict[str, Any]:
         "trailing_bytes_hex": capture.trailing_bytes_hex,
         "transmit_performed": capture.transmit_performed,
         "unparsed_bytes_hex": capture.unparsed_bytes_hex,
+        "capture_metadata": capture.capture_metadata,
     }

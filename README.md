@@ -2,7 +2,7 @@
 
 **Read-only identification and diagnostics for Quansheng radios.**
 
-QSIdentify 1.0.0 sends one allowlisted, read-only identification query and
+QSIdentify 1.1.0 sends one allowlisted, read-only identification query and
 records the complete bounded serial stream. It separates adapter echo, framed
 responses, null bytes, incomplete candidates and unknown binary evidence
 without claiming that a firmware string proves a hardware revision.
@@ -63,7 +63,7 @@ qsidentify doctor
 Example summary:
 
 ```text
-QSIdentify 1.0.0
+QSIdentify 1.1.0
 
 Transport
   Port:              /dev/ttyUSB0

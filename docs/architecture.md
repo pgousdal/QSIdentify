@@ -55,3 +55,8 @@ evidence. Offline advisory is invoked only after capture/report construction.
 The registry is constructed deterministically from package imports. There is no
 filesystem scanning, entry-point discovery, network import or external plugin
 execution.
+
+M1.1 adds a release-hardening lifecycle after capture construction: offline
+sanitization removes host metadata, validation replays driver analysis, fixture
+manifests bind golden evidence to SHA-256, and artifact smoke tests verify the
+same compiled registry and catalogs after installation.

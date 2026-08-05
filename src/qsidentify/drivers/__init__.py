@@ -1,4 +1,11 @@
-from .base import CatalogValidation, Driver, DriverInfo, FirmwareProjectInfo, HardwareInfo
+from .base import (
+    DRIVER_API_VERSION,
+    CatalogValidation,
+    Driver,
+    DriverInfo,
+    FirmwareProjectInfo,
+    HardwareInfo,
+)
 from .quansheng import QuanshengDriver
 from .registry import DriverRegistry
 
@@ -20,6 +27,7 @@ def get_driver(driver_id: str) -> Driver:
 __all__ = [
     "BUILTIN_DRIVERS",
     "CatalogValidation",
+    "DRIVER_API_VERSION",
     "Driver",
     "DriverInfo",
     "DriverRegistry",

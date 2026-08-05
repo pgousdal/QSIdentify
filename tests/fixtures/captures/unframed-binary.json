@@ -1,0 +1,102 @@
+{
+  "baud_rate": 38400,
+  "candidate_frames": [],
+  "capture_metadata": {
+    "fixture_kind": "synthetic-regression-capture",
+    "radio_family": "Quansheng UV-K5 family",
+    "reported_firmware": null,
+    "reported_model": null,
+    "sanitization": [],
+    "sanitized": true,
+    "source": "deterministic test construction"
+  },
+  "created_utc": "2000-01-01T00:00:00+00:00",
+  "decoded_valid_frames_hex": [],
+  "driver_id": "quansheng",
+  "driver_version": "1.0",
+  "dtr_setting": "auto",
+  "echo_frames_hex": [],
+  "encoded_transmitted_frame_hex": "abcd0800026910e644a85a24b9a9dcba",
+  "idle_timeout": 0.2,
+  "leading_bytes_hex": "0020000229100014",
+  "line_state": {
+    "dtr": false,
+    "rts": false
+  },
+  "logical_request_payload_hex": "140504006a395764",
+  "operation": "probe",
+  "port": {
+    "description": null,
+    "device": "/dev/ttyUSB0",
+    "manufacturer": null,
+    "pid": 29987,
+    "product": null,
+    "serial_number": null,
+    "vid": 6790
+  },
+  "probe_report": {
+    "baud_rate": 38400,
+    "confidence": "low",
+    "detected_protocol": "No framed protocol response",
+    "evidence": [
+      {
+        "kind": "raw-response-hex",
+        "source": "serial-stream",
+        "value": "0020000229100014"
+      }
+    ],
+    "frame_complete": false,
+    "frame_detected": false,
+    "idle_timeout": 0.2,
+    "inferred_family": null,
+    "message_type": "unframed-binary-response",
+    "operating_mode": "unknown",
+    "port": {
+      "description": null,
+      "device": "/dev/ttyUSB0",
+      "manufacturer": null,
+      "pid": 29987,
+      "product": null,
+      "serial_number": null,
+      "vid": 6790
+    },
+    "qsidentify_version": "1.1.0",
+    "reported_bootloader_version": null,
+    "reported_version": null,
+    "response_received": true,
+    "schema_version": 2,
+    "settle_delay": 0.1,
+    "timeout": 3.0,
+    "transport_classification": "unframed-binary-response",
+    "warnings": [
+      "Unframed binary bytes were preserved without protocol identification."
+    ]
+  },
+  "qsidentify_version": "1.1.0",
+  "raw_response_hex": "0020000229100014",
+  "read_chunks": [
+    {
+      "data_hex": "0020000229100014",
+      "monotonic_offset_ms": 1.0,
+      "sequence": 1
+    }
+  ],
+  "rts_setting": "auto",
+  "safety": {
+    "arbitrary_transmit": "disabled",
+    "classification": "read-only",
+    "command": "identify-handshake"
+  },
+  "schema_version": 3,
+  "serial_configuration": {
+    "bytesize": 8,
+    "parity": "none",
+    "stopbits": 1.0
+  },
+  "settle_delay": 0.1,
+  "stream_classification": "unframed-binary-response",
+  "total_timeout": 3.0,
+  "trailing_bytes_hex": "0020000229100014",
+  "transmit_performed": true,
+  "unparsed_bytes_hex": "0020000229100014"
+}

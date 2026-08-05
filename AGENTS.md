@@ -54,6 +54,10 @@ purely interpret transport evidence supplied by core orchestration. Runtime
 discovery, entry points, dynamic external imports and plugin downloads are
 forbidden.
 
+M1.1 fixtures under `tests/fixtures` are sanitized, provenance-labeled and
+manifest-hashed. Package, driver API, driver implementation, capture schema and
+catalog versions remain separate contracts.
+
 ## Coding requirements
 
 - Python 3.11+

@@ -86,6 +86,7 @@ def build_capture(result: ProbeResult, *, created_utc: str | None = None) -> Cap
         },
         driver_id=result.driver_id,
         driver_version=result.driver_version,
+        capture_metadata=None,
     )
 
 
@@ -287,6 +288,9 @@ def _read_v2(raw: dict[str, Any], *, schema_version: int = 2) -> Capture:
     driver_version = _required(raw, "driver_version", str) if schema_version >= 3 else "1.0"
     if not driver_id or not driver_version:
         _fail("Capture driver identity fields must be non-empty.")
+    metadata_value = raw.get("capture_metadata")
+    if metadata_value is not None and not isinstance(metadata_value, dict):
+        _fail("Capture sanitization metadata must be an object or null.")
     try:
         driver = get_driver(driver_id)
     except KeyError as exc:
@@ -438,6 +442,7 @@ def _read_v2(raw: dict[str, Any], *, schema_version: int = 2) -> Capture:
         safety={str(key): str(value) for key, value in safety.items()},
         driver_id=driver_id,
         driver_version=driver_version,
+        capture_metadata=metadata_value,
     )
 
 

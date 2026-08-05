@@ -25,3 +25,6 @@ Compatibility states are deliberately narrow:
 Firmware for the wrong MCU family can make a radio unbootable. Always consult
 the selected project's current documentation; the local catalog may be stale.
 No firmware should be flashed based on QSIdentify's firmware advisory alone.
+
+The sanitized physical regression derivative reporting `2.01.36` validates the
+observed frame and firmware string only; it does not establish MCU or PCB.

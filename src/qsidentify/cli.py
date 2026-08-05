@@ -15,6 +15,15 @@ from .capture import CaptureError, build_capture, read_capture, write_capture
 from .comparison import compare_captures
 from .doctor import run_checks
 from .drivers import default_driver, drivers, get_driver
+from .fixtures import validate_fixture_manifest
+from .hardening import (
+    ValidationStatus,
+    audit_results,
+    inspect_capture,
+    release_info,
+    sanitize_capture,
+    validate_capture,
+)
 from .models import Capture, DecodedResponse, LineSetting, MessageType, ProbeResult
 from .ports import choose_auto_port, find_port, list_serial_ports
 from .probe import monitor_port, probe_port
@@ -137,7 +146,27 @@ def ports_command() -> None:
 
 
 @app.command("drivers")
-def drivers_command() -> None:
+def drivers_command(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
+    if as_json:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "drivers": [
+                        {
+                            "api_version": driver.info.api_version,
+                            "driver_id": driver.info.id,
+                            "driver_version": driver.info.version,
+                            "protocols": list(driver.info.protocols),
+                            "safety": driver.info.safety,
+                        }
+                        for driver in drivers()
+                    ]
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        return
     table = Table(title="Built-in radio drivers")
     for column in ("ID", "Version", "Protocols", "Safety"):
         table.add_column(column)
@@ -152,12 +181,31 @@ def drivers_command() -> None:
 
 
 @app.command("driver-info")
-def driver_info_command(driver_id: str) -> None:
+def driver_info_command(
+    driver_id: str, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
     try:
         driver = get_driver(driver_id)
     except KeyError as exc:
         error_console.print(str(exc))
         raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "api_version": driver.info.api_version,
+                    "commands": [command.name for command in driver.supported_commands()],
+                    "driver_id": driver.info.id,
+                    "driver_version": driver.info.version,
+                    "models": list(driver.supported_models()),
+                    "protocols": list(driver.supported_protocols()),
+                    "safety": driver.info.safety,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        return
     console.print("[bold]Driver[/bold]")
     console.print(f"  ID:         {driver.info.id}")
     console.print(f"  Version:    {driver.info.version}")
@@ -440,13 +488,42 @@ def decode_command(path: Path) -> None:
 
 
 @app.command("compare")
-def compare_command(paths: Annotated[list[Path], typer.Argument()]) -> None:
+def compare_command(
+    paths: Annotated[list[Path], typer.Argument()],
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
     try:
         captures = tuple(read_capture(path) for path in paths)
         comparison = compare_captures(captures)
     except (CaptureError, ValueError) as exc:
         error_console.print(f"Compare failed: {exc}")
         raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "byte_frequency": [list(item) for item in comparison.byte_frequency],
+                    "common_positions": [list(item) for item in comparison.common_positions],
+                    "common_prefix_hex": comparison.common_prefix.hex(),
+                    "common_suffix_hex": comparison.common_suffix.hex(),
+                    "exact_match": comparison.exact_match,
+                    "summaries": [
+                        {
+                            "classification": item.classification,
+                            "echo_present": item.echo_present,
+                            "framed": item.framed,
+                            "null_percentage": item.null_percentage,
+                            "response_length": item.response_length,
+                            "sha256": item.sha256,
+                        }
+                        for item in comparison.summaries
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        return
     table = Table(title="Capture comparison")
     for column in (
         "Capture",
@@ -552,6 +629,108 @@ def firmware_catalog_validate_command() -> None:
         f"{validation.firmware_entries} entries, "
         f"{validation.hardware_records} hardware records."
     )
+
+
+@app.command("capture-sanitize")
+def capture_sanitize_command(
+    input_path: Path,
+    output_path: Path,
+    verify: Annotated[bool, typer.Option("--verify")] = True,
+) -> None:
+    if input_path.resolve() == output_path.resolve():
+        error_console.print("Capture sanitize refused: input and output must differ.")
+        raise typer.Exit(3)
+    try:
+        capture = read_capture(input_path)
+        sanitized, transformations = sanitize_capture(capture)
+        write_capture(output_path, sanitized)
+        if verify and validate_capture(output_path).status is not ValidationStatus.VALID:
+            raise CaptureError("Sanitized capture did not validate cleanly.")
+    except (CaptureError, OSError) as exc:
+        error_console.print(f"Capture sanitize failed: {exc}")
+        raise typer.Exit(3) from None
+    for item in transformations:
+        console.print(f"Applied: {item}")
+    console.print("Sanitized capture written and validated.")
+
+
+@app.command("capture-inspect")
+def capture_inspect_command(
+    path: Path, as_json: Annotated[bool, typer.Option("--json")] = False
+) -> None:
+    try:
+        result = inspect_capture(read_capture(path))
+    except CaptureError as exc:
+        error_console.print(f"Capture inspect failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
+        return
+    for key, value in result.items():
+        console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("capture-validate")
+def capture_validate_command(
+    paths: Annotated[list[Path], typer.Argument()],
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    results = [(path, validate_capture(path)) for path in paths]
+    if as_json:
+        sys.stdout.write(
+            json.dumps({"captures": [result.to_dict() for _, result in results]}, sort_keys=True)
+            + "\n"
+        )
+    else:
+        for _path, result in results:
+            console.print(result.status.value)
+    statuses = {result.status for _, result in results}
+    if ValidationStatus.UNKNOWN_DRIVER in statuses:
+        raise typer.Exit(5)
+    if ValidationStatus.UNSUPPORTED_SCHEMA in statuses:
+        raise typer.Exit(4)
+    if ValidationStatus.INVALID in statuses:
+        raise typer.Exit(3)
+    if ValidationStatus.VALID_WARNINGS in statuses:
+        raise typer.Exit(1)
+
+
+@app.command("release-info")
+def release_info_command(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
+    info = release_info()
+    if as_json:
+        sys.stdout.write(json.dumps(info, sort_keys=True) + "\n")
+        return
+    for key, value in info.items():
+        console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("audit")
+def audit_command(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
+    checks = audit_results()
+    if as_json:
+        sys.stdout.write(json.dumps({"checks": checks}, sort_keys=True) + "\n")
+    else:
+        for check in checks:
+            console.print(f"{check['check']}: {'ok' if check['ok'] else 'failed'}")
+    if not all(check["ok"] for check in checks):
+        raise typer.Exit(1)
+
+
+@app.command("fixture-validate")
+def fixture_validate_command(
+    root: Annotated[Path, typer.Option("--root")] = Path("tests/fixtures"),
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    result = validate_fixture_manifest(root)
+    if as_json:
+        sys.stdout.write(json.dumps(result.to_dict(), sort_keys=True) + "\n")
+    else:
+        console.print(f"Fixture corpus: {'valid' if result.ok else 'invalid'} ({result.checked})")
+        for error in result.errors:
+            error_console.print(error)
+    if not result.ok:
+        raise typer.Exit(3)
 
 
 @app.command("doctor")

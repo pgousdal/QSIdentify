@@ -1,0 +1,125 @@
+{
+  "entries": [
+    {
+      "classification": "framed-response",
+      "driver_id": "quansheng",
+      "message_type": "bootloader-response",
+      "path": "captures/bootloader-response.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "091ce1c7d564db182917d83c292fab65bf41452d1e4048b1b67fd304efdca4de"
+    },
+    {
+      "classification": "echo-only",
+      "driver_id": "quansheng",
+      "message_type": "echo-only",
+      "path": "captures/echo-only.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "8a1deaeb831cba87af4da9c7013a8e7ccfc9a172c68379727de2ce6f29aaefa2"
+    },
+    {
+      "classification": "incomplete-response",
+      "driver_id": "quansheng",
+      "message_type": "incomplete-response",
+      "path": "captures/incomplete-frame.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "ecbbae5e19c420ed54a659347fd2e0eca3434311be50e61bb9adf91acc034ecd"
+    },
+    {
+      "classification": "invalid-frame",
+      "driver_id": "quansheng",
+      "message_type": "invalid-frame",
+      "path": "captures/invalid-checksum.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "dadab4a8bec498a1d05c7911b2bf29b769c9f5cbcdceca197e187951be7b0e65"
+    },
+    {
+      "classification": "no-response",
+      "driver_id": "quansheng",
+      "message_type": "no-response",
+      "path": "captures/no-response.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "70fc96ba71cde8436cb2207575650a403b154a55ecdb487a887bd809d5160899"
+    },
+    {
+      "classification": "null-byte-response",
+      "driver_id": "quansheng",
+      "message_type": "null-byte-response",
+      "path": "captures/null-byte-response.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "6ebfaadab408bdef7dde086e181a4d996a3684b4997df8b4890d6c68efc1c924"
+    },
+    {
+      "classification": "framed-response",
+      "driver_id": "quansheng",
+      "message_type": "firmware-identification-response",
+      "path": "captures/schema-v1.json",
+      "provenance": "synthetic-schema-compatibility",
+      "reported_version": "2.01.36",
+      "schema_version": 1,
+      "sha256": "de2a77b5421ce32a4ede06d7ad343a66027c274f553cc59f00ad56bc1d597d25"
+    },
+    {
+      "classification": "framed-response",
+      "driver_id": "quansheng",
+      "message_type": "firmware-identification-response",
+      "path": "captures/schema-v2.json",
+      "provenance": "synthetic-schema-compatibility",
+      "reported_version": "2.01.36",
+      "schema_version": 2,
+      "sha256": "d72cd53f10406ccb77d5acbc7a3d6256cb2746461cdc4b921f971592a88cd623"
+    },
+    {
+      "classification": "unframed-binary-response",
+      "driver_id": "quansheng",
+      "message_type": "unframed-binary-response",
+      "path": "captures/unframed-binary.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "06a95cda03b3e25f1c5179b6eff5d35202c39614624e77d93049560aed58060d"
+    },
+    {
+      "classification": "framed-response",
+      "driver_id": "quansheng",
+      "message_type": "firmware-identification-response",
+      "path": "captures/uv-k5-8-2.01.36.json",
+      "provenance": "sanitized-physical-capture",
+      "reported_version": "2.01.36",
+      "schema_version": 3,
+      "sha256": "7aee7aa30646c427a6852e666c4cfafdccddda74b385faa9f53e05785a83af82"
+    },
+    {
+      "classification": "framed-response",
+      "driver_id": "quansheng",
+      "message_type": "firmware-identification-response",
+      "path": "captures/valid-firmware.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": "2.01.36",
+      "schema_version": 3,
+      "sha256": "f84c75963d9a7d9ae2670d2ff384d6286b4aa40b892c9c53d18917ed79f4d6c3"
+    },
+    {
+      "classification": "framed-response",
+      "driver_id": "quansheng",
+      "message_type": "valid-unknown-frame",
+      "path": "captures/valid-unknown-frame.json",
+      "provenance": "synthetic-regression-capture",
+      "reported_version": null,
+      "schema_version": 3,
+      "sha256": "00e0128ac61a51a7988855b47fad666a440d1b1c62e343de52b20d4d1f892245"
+    }
+  ],
+  "schema_version": 1
+}

@@ -7,6 +7,8 @@ from typing import Any
 
 from qsidentify.models import Capture, Command, DecodedResponse, StreamAnalysis
 
+DRIVER_API_VERSION = 1
+
 
 @dataclass(frozen=True, slots=True)
 class DriverInfo:
@@ -17,6 +19,7 @@ class DriverInfo:
     models: tuple[str, ...]
     vid_pid: tuple[tuple[int, int], ...]
     safety: str = "read-only"
+    api_version: int = DRIVER_API_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +98,7 @@ class Driver(ABC):
 
 __all__ = [
     "CatalogValidation",
+    "DRIVER_API_VERSION",
     "Driver",
     "DriverInfo",
     "FirmwareProjectInfo",

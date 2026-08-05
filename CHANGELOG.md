@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 - 2026-08-05
+
+- add sanitized hardware regression captures and fixture manifest
+- add capture sanitize, inspect and validation workflows
+- define driver API version 1 and stable JSON/release/audit contracts
+- verify packaged catalogs and isolated wheel/sdist installation
+
 ## 1.0.0 - 2026-08-05
 
 - introduce a stable, immutable driver interface and deterministic built-in registry

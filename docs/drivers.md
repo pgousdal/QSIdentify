@@ -21,6 +21,9 @@ firmware catalog and conservative compatibility advisory. Historical imports
 under `qsidentify.protocol`, `qsidentify.advisory` and `qsidentify.catalog`
 remain thin compatibility exports.
 
+`DRIVER_API_VERSION` is independently versioned and currently `1`.
+`DriverInfo.api_version` must match it or deterministic registration fails.
+
 Adding another built-in family requires a self-contained driver package and one
 explicit registry construction entry. Core transport, capture, CLI and advisory
 presentation do not require protocol-specific branches.

@@ -30,3 +30,6 @@ M0.3 does not add any serial command. Its firmware advisory reads existing
 captures, packaged JSON metadata and explicit user input only. It cannot fetch,
 read, decrypt, pack, unpack, modify, select, upload or flash firmware. It does
 not invoke browser flashers, vendor tools, k5prog, or any comparable utility.
+
+M1.1 audit, release, fixture and capture commands are offline and never open a
+serial port. The allowlist remains exactly one read-only identification command.

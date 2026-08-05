@@ -25,6 +25,10 @@ compiled-in interpreter required to validate and decode the evidence. Schema-v1
 and schema-v2 captures load as historical Quansheng captures with driver version
 `1.0`; their stored bytes and reports are not rewritten.
 
+Sanitization migrates v1/v2 evidence to v3, preserves every byte-bearing field,
+normalizes device and timestamp metadata, removes USB/host descriptions, and
+records transformations in optional `capture_metadata`.
+
 Selected device paths beneath the local home directory are redacted. Captures
 do not collect unrelated device paths, usernames, network data or telemetry.
 
