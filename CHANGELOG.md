@@ -1,6 +1,6 @@
 # Changelog
 
-## M2.0 governance layer
+## Unreleased — M2.0 governance layer
 
 - add immutable evidence lifecycle transitions with chained audit history
 - add structured review records, blind review views and configurable thresholds

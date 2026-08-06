@@ -1,0 +1,70 @@
+name: Hardware and evidence report
+description: Submit sanitized observations about a physical radio and its evidence.
+title: "hardware: "
+labels: [evidence, hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include raw private captures, hostnames, usernames, USB serials,
+        filesystem paths, or firmware binaries. Firmware strings and marketing
+        names do not prove hardware revision.
+  - type: input
+    id: version
+    attributes:
+      label: QSIdentify version or commit
+    validations:
+      required: true
+  - type: input
+    id: driver
+    attributes:
+      label: Driver
+      placeholder: quansheng
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Declared marketed model
+      description: User-provided label only; do not present it as electronic proof.
+  - type: input
+    id: firmware
+    attributes:
+      label: Electronically observed firmware string
+      description: Report exactly what the decoded response returned.
+  - type: input
+    id: pcb
+    attributes:
+      label: Visually inspected PCB or revision marking
+  - type: input
+    id: mcu
+    attributes:
+      label: Visually inspected MCU marking
+  - type: input
+    id: vidpid
+    attributes:
+      label: Cable VID:PID
+  - type: dropdown
+    id: opened
+    attributes:
+      label: Was the radio opened?
+      options:
+        - "No"
+        - "Yes"
+        - "Unknown"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized capture or evidence bundle details
+      description: Link only to sanitized, provenance-labeled evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Confidence and provenance
+      description: Separate observed bytes, physical inspection, declarations, and inference.
+    validations:
+      required: true

@@ -1,0 +1,54 @@
+name: Bug report
+description: Report an unexpected software or diagnostic result.
+title: "bug: "
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: QSIdentify version
+      placeholder: "1.3.0 or git commit"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and Python version
+      placeholder: "Linux 6.x, Python 3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command used
+      description: Include the command, but redact private paths and identifiers.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Sanitized output
+      description: Remove usernames, hostnames, USB serials, and private paths.
+    validations:
+      required: true
+  - type: input
+    id: vidpid
+    attributes:
+      label: Cable VID:PID
+      placeholder: "1a86:7523 or unknown"
+  - type: dropdown
+    id: serial_consumer
+    attributes:
+      label: Other serial consumers stopped?
+      options:
+        - "Yes"
+        - "No"
+        - "Unknown"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
