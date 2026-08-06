@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install development tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Validate tag matches package version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(python -c 'import qsidentify; print(qsidentify.__version__)')"
+
+          echo "Tag version:     ${TAG_VERSION}"
+          echo "Package version: ${PACKAGE_VERSION}"
+
+          if [[ "${TAG_VERSION}" != "${PACKAGE_VERSION}" ]]; then
+            echo "::error::Tag v${TAG_VERSION} does not match package version ${PACKAGE_VERSION}"
+            exit 1
+          fi
+
+      - name: Run quality gates
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy src
+          pytest
+          python -m compileall -q src tests
+          git diff --check
+
+      - name: Run QSIdentify offline validation
+        run: |
+          qsidentify audit
+          qsidentify fixture-validate
+          qsidentify release-info
+
+      - name: Build wheel and source distribution
+        run: python -m build
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum \
+            qsidentify-*.whl \
+            qsidentify-*.tar.gz \
+            > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Test wheel in isolated environment
+        shell: bash
+        run: |
+          python -m venv /tmp/qsidentify-wheel-test
+          /tmp/qsidentify-wheel-test/bin/python -m pip install \
+            dist/qsidentify-*.whl
+
+          /tmp/qsidentify-wheel-test/bin/qsidentify --version
+          /tmp/qsidentify-wheel-test/bin/qsidentify drivers
+          /tmp/qsidentify-wheel-test/bin/qsidentify driver-info quansheng
+          /tmp/qsidentify-wheel-test/bin/qsidentify audit
+
+      - name: Test source distribution
+        shell: bash
+        run: |
+          python -m venv /tmp/qsidentify-sdist-test
+          /tmp/qsidentify-sdist-test/bin/python -m pip install \
+            dist/qsidentify-*.tar.gz
+
+          /tmp/qsidentify-sdist-test/bin/qsidentify --version
+          /tmp/qsidentify-sdist-test/bin/qsidentify drivers
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/qsidentify-*.whl \
+            dist/qsidentify-*.tar.gz \
+            dist/SHA256SUMS \
+            --verify-tag \
+            --generate-notes \
+            --title "QSIdentify ${GITHUB_REF_NAME#v}"
