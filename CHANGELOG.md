@@ -1,5 +1,13 @@
 # Changelog
 
+## M2.0 governance layer
+
+- add immutable evidence lifecycle transitions with chained audit history
+- add structured review records, blind review views and configurable thresholds
+- add explicit catalog proposals, approvals and regression certification
+- add deterministic, checksummed publication ZIP verification
+- add offline governance CLI commands and public governance API
+
 ## 1.3.0 - 2026-08-05
 
 - add deterministic schema-v1 offline evidence registries with immutable records

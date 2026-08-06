@@ -50,3 +50,19 @@ The API is synchronous. Callers coordinate concurrent access to one device.
 transport subclasses, `OSError`, or `ValueError`. Documented parameters and the
 immutable `IdentificationResult(driver, report)` fields follow semantic
 versioning.
+
+The M2.0 governance API is available from `qsidentify`:
+
+```python
+from qsidentify import (
+    approve_proposal,
+    build_publication,
+    create_proposal,
+    create_review,
+    verify_publication,
+)
+```
+
+Governance operations accept and return frozen ledger models. They are offline,
+append-only operations; publication verification returns a structured result
+and never extracts or executes archive members.

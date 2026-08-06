@@ -50,6 +50,23 @@ from .evidence_registry import (
     write_registry,
 )
 from .fixtures import validate_fixture_manifest
+from .governance import (
+    GovernanceError,
+    ReviewDecision,
+    ReviewType,
+    apply_transition,
+    approve_proposal,
+    build_publication,
+    create_governance,
+    create_proposal,
+    create_review,
+    inspect_publication,
+    load_governance,
+    submit_proposal_review,
+    verify_publication,
+    write_governance,
+)
+from .governance.models import EvidenceStage
 from .hardening import (
     ValidationStatus,
     audit_results,
@@ -1491,6 +1508,329 @@ def fixture_validate_command(
             error_console.print(error)
     if not result.ok:
         raise typer.Exit(3)
+
+
+def _governance_output(value: object, as_json: bool) -> None:
+    if as_json:
+        sys.stdout.write(json.dumps(value, sort_keys=True) + "\n")
+
+
+def _load_ledger(path: Path) -> Any:
+    try:
+        return load_governance(path)
+    except (GovernanceError, OSError) as exc:
+        error_console.print(f"Governance ledger failed: {exc}")
+        raise typer.Exit(3) from None
+
+
+@app.command("governance-create")
+def governance_create_command(
+    path: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    if path.exists():
+        error_console.print("Governance ledger already exists; refusing to overwrite it.")
+        raise typer.Exit(2)
+    try:
+        ledger = create_governance()
+        write_governance(path, ledger)
+    except (GovernanceError, OSError) as exc:
+        error_console.print(f"Governance ledger creation failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {
+        "ledger_id": ledger.ledger_id,
+        "schema_version": ledger.schema_version,
+        "status": "created",
+    }
+    if as_json:
+        _governance_output(output, True)
+    else:
+        console.print(f"Governance ledger created: {ledger.ledger_id}")
+
+
+@app.command("review-create")
+def review_create_command(
+    ledger_id: Path,
+    subject_id: str,
+    reviewer: Annotated[str, typer.Option("--reviewer")],
+    decision: Annotated[ReviewDecision, typer.Option("--decision")],
+    review_type: Annotated[ReviewType, typer.Option("--type")] = ReviewType.EVIDENCE,
+    rationale: Annotated[str, typer.Option("--rationale")] = "",
+    supporting: Annotated[list[str] | None, typer.Option("--supporting")] = None,
+    contradicting: Annotated[list[str] | None, typer.Option("--contradicting")] = None,
+    references: Annotated[list[str] | None, typer.Option("--reference")] = None,
+    blind: Annotated[bool, typer.Option("--blind")] = False,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    try:
+        updated, review = create_review(
+            ledger,
+            reviewer_id=reviewer,
+            review_type=review_type,
+            decision=decision,
+            rationale=rationale,
+            subject_id=subject_id,
+            supporting_evidence=tuple(supporting or ()),
+            contradicting_evidence=tuple(contradicting or ()),
+            references=tuple(references or ()),
+            blind=blind,
+        )
+        write_governance(ledger_id, updated)
+    except (GovernanceError, OSError) as exc:
+        error_console.print(f"Review creation failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {"review_id": review.review_id, "status": "created"}
+    if as_json:
+        _governance_output(output, True)
+    else:
+        console.print(f"Review created: {review.review_id}")
+
+
+@app.command("review-list")
+def review_list_command(
+    ledger_id: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    output = {
+        "reviews": [
+            {
+                "decision": item.decision.value,
+                "review_id": item.review_id,
+                "review_type": item.review_type.value,
+                "reviewer_id": item.reviewer_id,
+                "subject_id": item.subject_id,
+                "timestamp": item.timestamp,
+            }
+            for item in ledger.reviews
+        ]
+    }
+    if as_json:
+        _governance_output(output, True)
+    else:
+        table = Table("Review ID", "Type", "Decision", "Reviewer", "Subject")
+        for item in output["reviews"]:
+            table.add_row(
+                item["review_id"],
+                item["review_type"],
+                item["decision"],
+                item["reviewer_id"],
+                item["subject_id"],
+            )
+        console.print(table)
+
+
+@app.command("review-show")
+def review_show_command(
+    ledger_id: Path,
+    review_id: str,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    review = next((item for item in ledger.reviews if item.review_id == review_id), None)
+    if review is None:
+        error_console.print(f"Unknown review: {review_id}")
+        raise typer.Exit(2)
+    output = review.to_dict()
+    if as_json:
+        _governance_output(output, True)
+    else:
+        for key, value in output.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+
+
+@app.command("proposal-create")
+def proposal_create_command(
+    ledger_id: Path,
+    registry_path: Path,
+    reviewer: Annotated[str, typer.Option("--reviewer")],
+    rationale: Annotated[str, typer.Option("--rationale")] = "",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    try:
+        registry = load_registry(registry_path)
+        updated, proposal = create_proposal(
+            ledger, registry, reviewer_id=reviewer, rationale=rationale
+        )
+        write_governance(ledger_id, updated)
+    except (GovernanceError, RegistryError, OSError) as exc:
+        error_console.print(f"Proposal creation failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {"proposal_id": proposal.proposal_id, "status": proposal.status.value}
+    if as_json:
+        _governance_output(output, True)
+    else:
+        console.print(f"Proposal created: {proposal.proposal_id} ({proposal.status.value})")
+
+
+@app.command("proposal-review")
+def proposal_review_command(
+    ledger_id: Path,
+    proposal_id: str,
+    reviewer: Annotated[str, typer.Option("--reviewer")],
+    decision: Annotated[ReviewDecision, typer.Option("--decision")],
+    rationale: Annotated[str, typer.Option("--rationale")] = "",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    try:
+        updated, _review = create_review(
+            ledger,
+            reviewer_id=reviewer,
+            review_type=ReviewType.PROPOSAL,
+            decision=decision,
+            rationale=rationale,
+            subject_id=proposal_id,
+        )
+        updated, proposal = submit_proposal_review(
+            updated, proposal_id, reviewer_id=reviewer, decision=decision.value, rationale=rationale
+        )
+        write_governance(ledger_id, updated)
+    except (GovernanceError, OSError) as exc:
+        error_console.print(f"Proposal review failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {"proposal_id": proposal_id, "status": proposal.status.value}
+    if as_json:
+        _governance_output(output, True)
+    else:
+        console.print(f"Proposal under review: {proposal_id}")
+
+
+@app.command("proposal-approve")
+def proposal_approve_command(
+    ledger_id: Path,
+    registry_path: Path,
+    proposal_id: str,
+    reviewer: Annotated[str, typer.Option("--reviewer")],
+    rationale: Annotated[str, typer.Option("--rationale")] = "",
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    try:
+        registry = load_registry(registry_path)
+        updated, proposal = approve_proposal(
+            ledger, registry, proposal_id, reviewer_id=reviewer, rationale=rationale
+        )
+        write_governance(ledger_id, updated)
+    except (GovernanceError, RegistryError, OSError) as exc:
+        error_console.print(f"Proposal approval failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {"proposal_id": proposal_id, "status": proposal.status.value}
+    if as_json:
+        _governance_output(output, True)
+    else:
+        console.print(f"Proposal approved: {proposal_id}")
+
+
+@app.command("publication-build")
+def publication_build_command(
+    ledger_id: Path,
+    registry_path: Path,
+    output: Annotated[Path, typer.Option("--output", "-o")],
+    proposal_id: str,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    try:
+        registry = load_registry(registry_path)
+        updated, publication, package_sha256 = build_publication(
+            ledger, registry, proposal_id, output=output
+        )
+        write_governance(ledger_id, updated)
+    except (GovernanceError, RegistryError, OSError) as exc:
+        error_console.print(f"Publication build failed: {exc}")
+        raise typer.Exit(3) from None
+    result = {
+        "publication_id": publication.publication_id,
+        "sha256": package_sha256,
+        "status": "built",
+    }
+    if as_json:
+        _governance_output(result, True)
+    else:
+        console.print(f"Publication built: {publication.publication_id}")
+
+
+@app.command("publication-inspect")
+def publication_inspect_command(
+    path: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        result = inspect_publication(path)
+    except (GovernanceError, OSError) as exc:
+        error_console.print(f"Publication inspection failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        _governance_output(result, True)
+    else:
+        for key, value in result.items():
+            console.print(f"{key.replace('_', ' ').title()}: {value}")
+    if not result["valid"]:
+        raise typer.Exit(1)
+
+
+@app.command("publication-verify")
+def publication_verify_command(
+    path: Path,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    try:
+        verification = verify_publication(path)
+    except (GovernanceError, OSError) as exc:
+        error_console.print(f"Publication verification failed: {exc}")
+        raise typer.Exit(3) from None
+    if as_json:
+        _governance_output(verification.to_dict(), True)
+    else:
+        console.print("valid" if verification.valid else "invalid")
+        for error in verification.errors:
+            error_console.print(error)
+    if not verification.valid:
+        raise typer.Exit(1)
+
+
+@app.command("governance-transition")
+def governance_transition_command(
+    ledger_id: Path,
+    registry_path: Path,
+    subject_id: str,
+    to_stage: Annotated[EvidenceStage, typer.Option("--stage")],
+    actor: Annotated[str, typer.Option("--actor")],
+    rationale: Annotated[str, typer.Option("--rationale")] = "",
+    evidence_id: Annotated[list[str] | None, typer.Option("--evidence-id")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    ledger = _load_ledger(ledger_id)
+    try:
+        registry = load_registry(registry_path)
+        result = apply_transition(
+            ledger,
+            registry,
+            subject_id=subject_id,
+            to_stage=to_stage,
+            actor=actor,
+            rationale=rationale,
+            evidence_ids=tuple(evidence_id or ()),
+            reviewer_id=actor if actor not in ("tool", "system") else None,
+        )
+        write_governance(ledger_id, result.ledger)
+    except (GovernanceError, RegistryError, OSError) as exc:
+        error_console.print(f"Transition failed: {exc}")
+        raise typer.Exit(3) from None
+    output = {
+        "from_stage": (
+            result.transition.from_stage.value if result.transition.from_stage else None
+        ),
+        "subject_id": subject_id,
+        "to_stage": result.transition.to_stage.value,
+    }
+    if as_json:
+        _governance_output(output, True)
+    else:
+        console.print(f"Transition recorded: {subject_id} -> {result.transition.to_stage.value}")
 
 
 @app.command("doctor")

@@ -33,6 +33,7 @@ Safety is more important than broad device support.
 - `drivers/registry.py` — deterministic compiled-in driver registry
 - `drivers/quansheng/` — Quansheng protocol, commands, catalogs and advisory
 - `advisory.py`, `catalog.py`, `protocol/` — backwards-compatible import shims
+- `governance/` — immutable evidence lifecycle, reviews, proposals, audit and publication
 
 Protocol decoding should remain side-effect free.
 
@@ -65,6 +66,12 @@ forbidden.
 M1.1 fixtures under `tests/fixtures` are sanitized, provenance-labeled and
 manifest-hashed. Package, driver API, driver implementation, capture schema and
 catalog versions remain separate contracts.
+
+M2.0 governance records observed, sanitized, imported, reviewed, correlated,
+candidate, approved and published evidence as immutable lifecycle transitions.
+Reviews, proposals, approvals and publication records are append-only audit
+events. Publication archives are deterministic and never contain firmware,
+captures or user metadata; they do not mutate production catalogs directly.
 
 ## Coding requirements
 
