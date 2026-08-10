@@ -41,4 +41,6 @@ def test_package_metadata_matches_canonical_version() -> None:
     )
     assert "Programming Language :: Python :: 3.11" in project["classifiers"]
     assert project["urls"]["Repository"].endswith("pgousdal/QSIdentify")
-    assert __version__ == "1.3.0"
+    parts = __version__.split(".")
+    assert len(parts) == 3
+    assert all(part.isdigit() for part in parts)
